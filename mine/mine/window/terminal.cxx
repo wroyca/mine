@@ -1,8 +1,9 @@
-#include <mine/mine-window-terminal.hxx>
+#include <mine/window/terminal.hxx>
 
 #include <iostream>
 
 #include <unistd.h>
+
 #include <sys/ioctl.h>
 
 using namespace std;

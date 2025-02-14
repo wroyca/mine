@@ -29,4 +29,9 @@ namespace mine
     virtual void
     run () = 0;
   };
+
+  // Factory function for creating window implementations.
+  //
+  std::unique_ptr <window>
+  create_window (window_type);
 }

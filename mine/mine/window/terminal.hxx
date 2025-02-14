@@ -4,7 +4,7 @@
 
 #include <termios.h>
 
-#include <mine/mine-window.hxx>
+#include <mine/window.hxx>
 
 namespace mine
 {

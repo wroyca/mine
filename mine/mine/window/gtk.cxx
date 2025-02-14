@@ -1,4 +1,4 @@
-#include <mine/mine-window-gtk.hxx>
+#include <mine/window/gtk.hxx>
 
 using namespace std;
 
@@ -14,7 +14,7 @@ namespace mine
     //
     adw_init ();
 
-    // Create application.
+    // Create application with dummy ID for DBus registration.
     //
     app_ = ADW_APPLICATION (
       adw_application_new ("org.mine.editor", G_APPLICATION_DEFAULT_FLAGS));

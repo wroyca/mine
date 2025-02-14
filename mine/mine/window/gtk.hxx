@@ -5,7 +5,7 @@
 #include <epoxy/gl.h>
 #include <epoxy/glx.h>
 
-#include <mine/mine-window.hxx>
+#include <mine/window.hxx>
 
 namespace mine
 {

@@ -2,29 +2,12 @@
 #include <memory>
 #include <concepts>
 
-#include <mine/mine-window.hxx>
-#include <mine/mine-window-gtk.hxx>
-#include <mine/mine-window-terminal.hxx>
+#include <mine/window.hxx>
 
 using namespace std;
 
 namespace mine
 {
-  // Factory function for creating window implementations.
-  //
-  unique_ptr<window>
-  create_window (window_type t)
-  {
-    switch (t)
-    {
-    case window_type::gtk:
-      return make_unique<gtk>();
-    case window_type::terminal:
-      return make_unique<terminal>();
-    }
-    throw std::runtime_error ("unknown window type");
-  }
-
   static void
   usage (ostream& o)
   {
