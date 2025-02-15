@@ -5,6 +5,7 @@
 #include <termios.h>
 
 #include <mine/window.hxx>
+#include <mine/buffer.hxx>
 
 namespace mine
 {
@@ -63,7 +64,10 @@ namespace mine
     handle_escape_sequence ();
 
   private:
-    termios orig_termios_;  // original terminal settings
-    bool termios_changed_;  // terminal settings modified flag
+    termios orig_termios;  // original terminal settings
+    bool termios_changed;  // terminal settings modified flag
+    buffer b;
+    size_t cursor_line;
+    size_t cursor_column;
   };
 }

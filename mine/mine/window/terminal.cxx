@@ -12,7 +12,9 @@ namespace mine
 {
   terminal::
   terminal () noexcept
-    : termios_changed_ (false)
+    : termios_changed (false),
+      cursor_line (0),
+      cursor_column (0)
   {
   }
 
@@ -49,34 +51,36 @@ namespace mine
     winsize w;
     ioctl (STDOUT_FILENO, TIOCGWINSZ, &w);
 
+    // Save cursor position.
+    //
+    cout << "\033[s";
+
     // Clear screen and move cursor to top.
     //
     cout << "\033[2J\033[H";
 
-    // Split content into lines and render.
+    // Render buffer contents.
     //
-    const string content ("hello");
-    size_t pos (0);
-    size_t line (0);
-
-    while (pos < content.size () && line < w.ws_row)
+    for (size_t i (0); i < b.line_count () && i < w.ws_row; ++i)
     {
-      size_t next (content.find ('\n', pos));
-      if (next == string::npos)
-        next = content.size ();
+      // Move to start of line.
+      //
+      cout << "\033[" << (i + 1) << ";1H";
+
+      const string& l (b.line (i));
 
       // Truncate line if it exceeds terminal width.
       //
-      size_t len (next - pos);
+      size_t len (l.size ());
       if (len > w.ws_col)
         len = w.ws_col;
 
-      cout << content.substr (pos, len) << '\n';
-
-      pos = next + 1;
-      line++;
+      cout << l.substr (0, len);
     }
 
+    // Position cursor.
+    //
+    cout << "\033[" << (cursor_line + 1) << ";" << (cursor_column + 1) << "H";
     cout << flush;
   }
 
@@ -85,12 +89,12 @@ namespace mine
   {
     // Get current terminal settings.
     //
-    if (tcgetattr (STDIN_FILENO, &orig_termios_) == -1)
+    if (tcgetattr (STDIN_FILENO, &orig_termios) == -1)
       throw runtime_error ("unable to get terminal attributes");
 
     // Modify terminal settings.
     //
-    struct termios raw (orig_termios_);
+    termios raw (orig_termios);
 
     // Input modes: no break, no CR to NL, no parity check, no strip char,
     // no start/stop output control.
@@ -120,16 +124,16 @@ namespace mine
     if (tcsetattr (STDIN_FILENO, TCSAFLUSH, &raw) == -1)
       throw runtime_error ("unable to set terminal attributes");
 
-    termios_changed_ = true;
+    termios_changed = true;
   }
 
   void terminal::
   restore_modes () noexcept
   {
-    if (termios_changed_)
+    if (termios_changed)
     {
-      tcsetattr (STDIN_FILENO, TCSAFLUSH, &orig_termios_);
-      termios_changed_ = false;
+      tcsetattr (STDIN_FILENO, TCSAFLUSH, &orig_termios);
+      termios_changed = false;
     }
   }
 
@@ -155,9 +159,44 @@ namespace mine
           render (); // redraw on unknown sequence
         break;
 
+      case '\r':
+      case '\n':
+        {
+          b.insert (cursor_line, cursor_column, "\n");
+          cursor_line++;
+          cursor_column = 0;
+          render ();
+          break;
+        }
+
+      case 127: // backspace
+        {
+          if (cursor_column > 0)
+          {
+            b.erase (cursor_line, cursor_column - 1);
+            cursor_column--;
+            render ();
+          }
+          else if (cursor_line > 0)
+          {
+            cursor_line--;
+            cursor_column = b.line (cursor_line).size ();
+            b.erase (cursor_line, cursor_column);
+            render ();
+          }
+          break;
+        }
+
       default:
-        render (); // redraw on any other input
-        break;
+        {
+          if (c >= 32 && c < 127)
+          {
+            b.insert (cursor_line, cursor_column, string (1, c));
+            cursor_column++;
+            render ();
+          }
+          break;
+        }
       }
     }
   }
@@ -179,19 +218,23 @@ namespace mine
     {
       switch (seq[1])
       {
-      // Up arrow.,
+      // Up arrow.
+      //
       case 'A':
         return true;
 
       // Down arrow.
+      //
       case 'B':
         return true;
 
       // Right arrow.
+      //
       case 'C':
         return true;
 
       // Left arrow.
+      //
       case 'D':
         return true;
       }

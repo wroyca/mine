@@ -1,6 +1,7 @@
 libs =
 import libs += libadwaita%lib{adwaita-1}
 import libs += libepoxy%lib{epoxy}
+import libs += libimmer%lib{immer}
 
 exe{mine}: {hxx ixx txx cxx}{**} $libs testscript
 
