@@ -1,10 +1,51 @@
 intf_libs = # Interface dependencies.
 impl_libs = # Implementation dependencies.
 
-lib{mine}: {hxx ixx txx cxx}{** -version} \
-           {hxx            }{    version} $impl_libs $intf_libs
+./: lib{mine}: {hxx ixx txx cxx}{** -mine -version} \
+               {hxx            }{          version} \
+               {hxx ixx     cxx}{    mine         } $impl_libs $intf_libs
 
 hxx{version}: in{version} $src_root/manifest
+
+# Command-line interface (CLI)
+#
+# Generate C++ command line interface from description files.
+# https://www.codesynthesis.com/projects/cli/doc/cli.xhtml
+#
+if $cli.configured
+{
+  cli.options += -I $src_root
+  cli.options += --std c++11
+  cli.options += --guard-prefix MINE
+  cli.options += --include-prefix libmine
+  cli.options += --include-with-brackets
+  cli.options += --cli-namespace mine::cli
+
+  # Recipe configuration.
+  #
+  cli.cxx{*}:
+  {
+    # Distribute generated CLI files and preserve them during src cleanup
+    # to maintain consistent source state across builds.
+    #
+    dist = true
+    clean = ($src_root != $out_root)
+
+    # Copy generated code back to src during forwarded configuration
+    # to maintain single source of truth in repository.
+    #
+    backlink = overwrite
+  }
+
+  cli.cxx{mine}: cli{mine}
+  {
+    cli.options += --generate-parse
+    cli.options += --suppress-undocumented
+    cli.options += --long-usage
+    cli.options += --ansi-color # bold/underline only
+    cli.options += --ascii-tree
+  }
+}
 
 # Build options.
 #

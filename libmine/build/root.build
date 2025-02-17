@@ -11,6 +11,14 @@ ixx{*}: extension = ixx
 txx{*}: extension = txx
 cxx{*}: extension = cxx
 
+# Load the cli module but only if it's available. This way a distribution
+# that includes pre-generated files can be built without installing cli.
+# This is also the reason why we need to explicitly spell out individual
+# source file prerequisites instead of using the cli.cxx{} group (it won't
+# be there unless the module is configured).
+#
+using? cli
+
 # The test target for cross-testing (running tests under Wine, etc).
 #
 test.target = $cxx.target

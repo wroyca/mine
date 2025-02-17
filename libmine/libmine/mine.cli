@@ -1,0 +1,15 @@
+namespace mine
+{
+  class options
+  {
+    bool --help
+    {
+      "Print usage information and exit."
+    };
+
+    bool --version
+    {
+      "Print version information and exit."
+    }
+  };
+}
