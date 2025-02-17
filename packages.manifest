@@ -1,2 +1,6 @@
 : 1
 location: mine/
+:
+location: libmine/
+:
+location: libmine-terminal/

@@ -1,0 +1,3 @@
+import libs = libmine-terminal%lib{mine-terminal}
+
+exe{driver}: {hxx ixx txx cxx}{**} $libs testscript{**}

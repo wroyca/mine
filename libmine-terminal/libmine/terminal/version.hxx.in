@@ -1,0 +1,34 @@
+#pragma once
+
+// The numeric version format is AAAAABBBBBCCCCCDDDE where:
+//
+// AAAAA - major version number
+// BBBBB - minor version number
+// CCCCC - bugfix version number
+// DDD   - alpha / beta (DDD + 500) version number
+// E     - final (0) / snapshot (1)
+//
+// When DDDE is not 0, 1 is subtracted from AAAAABBBBBCCCCC. For example:
+//
+// Version      AAAAABBBBBCCCCCDDDE
+//
+// 0.1.0        0000000001000000000
+// 0.1.2        0000000001000020000
+// 1.2.3        0000100002000030000
+// 2.2.0-a.1    0000200001999990010
+// 3.0.0-b.2    0000299999999995020
+// 2.2.0-a.1.z  0000200001999990011
+//
+#define LIBMINE_TERMINAL_VERSION       $libmine_terminal.version.project_number$ULL
+#define LIBMINE_TERMINAL_VERSION_STR   "$libmine_terminal.version.project$"
+#define LIBMINE_TERMINAL_VERSION_ID    "$libmine_terminal.version.project_id$"
+#define LIBMINE_TERMINAL_VERSION_FULL  "$libmine_terminal.version$"
+
+#define LIBMINE_TERMINAL_VERSION_MAJOR $libmine_terminal.version.major$
+#define LIBMINE_TERMINAL_VERSION_MINOR $libmine_terminal.version.minor$
+#define LIBMINE_TERMINAL_VERSION_PATCH $libmine_terminal.version.patch$
+
+#define LIBMINE_TERMINAL_PRE_RELEASE   $libmine_terminal.version.pre_release$
+
+#define LIBMINE_TERMINAL_SNAPSHOT_SN   $libmine_terminal.version.snapshot_sn$ULL
+#define LIBMINE_TERMINAL_SNAPSHOT_ID   "$libmine_terminal.version.snapshot_id$"

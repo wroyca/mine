@@ -1,0 +1,6 @@
+$out_root/
+{
+  include libmine/terminal/
+}
+
+export $out_root/libmine/terminal/$import.target
