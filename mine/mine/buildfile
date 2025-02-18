@@ -1,24 +1,6 @@
 libs =
 import libs += libmine%lib{mine}
 
-./: exe{mine}: libue{mine}: {hxx ixx txx cxx}{** -**.test...} $libs
-exe{mine}: testscript
-
-# Unit tests.
-#
-exe{*.test}:
-{
-  test = true
-  install = false
-}
-
-for t: cxx{**.test...}
-{
-  d = $directory($t)
-  n = $name($t)...
-
-  ./: $d/exe{$n}: $t $d/{hxx ixx txx}{+$n} $d/testscript{+$n}
-  $d/exe{$n}: libue{mine}: bin.whole = false
-}
+exe{mine}: {hxx ixx txx cxx}{**} $libs
 
 cxx.poptions =+ "-I$out_root" "-I$src_root"

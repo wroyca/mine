@@ -14,7 +14,7 @@ namespace mine
     case window_type::gtk:
       return make_unique<gtk>();
     case window_type::terminal:
-      return make_unique<terminal>();
+      return make_unique<terminal::terminal>();
     }
     throw runtime_error ("unknown window type");
   }

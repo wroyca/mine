@@ -1,3 +1,5 @@
+#pragma once
+
 // Multi-purpose headers
 //
 // #if __has_include(<cstdlib>)
@@ -189,9 +191,9 @@
 // #if __has_include(<unordered_set>)
 // #  include <unordered_set>
 // #endif
-// #if __has_include(<vector>)
-// #  include <vector>
-// #endif
+#if __has_include(<vector>)
+#  include <vector>
+#endif
 
 // Iterators library
 //
@@ -389,10 +391,18 @@ namespace mine
 {
   using std::size_t;
   using std::string;
+  using std::to_string;
   using std::string_view;
   using std::out_of_range;
   using std::runtime_error;
+  using std::invalid_argument;
   using std::cout;
   using std::cerr;
   using std::flush;
+  using std::optional;
+  using std::vector;
+  using std::numeric_limits;
+  using std::nullopt;
+  using std::pair;
+  using std::make_pair;
 }
