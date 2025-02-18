@@ -41,7 +41,7 @@ namespace mine
 
       usage_para (value);
 
-      operator value () const
+      operator value () const 
       {
         return v_;
       }
@@ -62,7 +62,7 @@ namespace mine
 
       unknown_mode (value);
 
-      operator value () const
+      operator value () const 
       {
         return v_;
       }
@@ -318,6 +318,9 @@ namespace mine
     // Option accessors.
     //
     const bool&
+    no_window () const;
+
+    const bool&
     help () const;
 
     const bool&
@@ -342,6 +345,7 @@ namespace mine
             ::mine::cli::unknown_mode argument);
 
     public:
+    bool no_window_;
     bool help_;
     bool version_;
   };

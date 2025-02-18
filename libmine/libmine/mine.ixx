@@ -155,6 +155,12 @@ namespace mine
   //
 
   inline const bool& options::
+  no_window () const
+  {
+    return this->no_window_;
+  }
+
+  inline const bool& options::
   help () const
   {
     return this->help_;

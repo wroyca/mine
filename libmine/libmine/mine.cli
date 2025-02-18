@@ -2,6 +2,12 @@ namespace mine
 {
   class options
   {
+    bool --no-window
+    {
+      "Tell Mine not to create a graphical window. When invoked from a terminal
+      window, the editor operates directly in that terminal."
+    }
+
     bool --help
     {
       "Print usage information and exit."

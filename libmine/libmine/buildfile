@@ -1,6 +1,10 @@
 intf_libs = # Interface dependencies.
 impl_libs = # Implementation dependencies.
 
+import intf_libs += libadwaita%lib{adwaita-1}
+import intf_libs += libepoxy%lib{epoxy}
+import intf_libs += libimmer%lib{immer}
+
 ./: lib{mine}: {hxx ixx txx cxx}{** -mine -version} \
                {hxx            }{          version} \
                {hxx ixx     cxx}{    mine         } $impl_libs $intf_libs

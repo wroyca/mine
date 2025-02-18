@@ -406,7 +406,8 @@ namespace mine
 
   options::
   options ()
-  : help_ (),
+  : no_window_ (),
+    help_ (),
     version_ ()
   {
   }
@@ -482,10 +483,14 @@ namespace mine
     if (p != ::mine::cli::usage_para::none)
       os << ::std::endl;
 
-    os << "\033[1m--help\033[0m    Print usage information and exit." << ::std::endl;
+    os << "\033[1m--no-window\033[0m Tell Mine not to create a graphical window. When invoked from a" << ::std::endl
+       << "            terminal window, the editor operates directly in that terminal." << ::std::endl;
 
     os << std::endl
-       << "\033[1m--version\033[0m Print version information and exit." << ::std::endl;
+       << "\033[1m--help\033[0m      Print usage information and exit." << ::std::endl;
+
+    os << std::endl
+       << "\033[1m--version\033[0m   Print version information and exit." << ::std::endl;
 
     p = ::mine::cli::usage_para::option;
 
@@ -502,6 +507,8 @@ namespace mine
   {
     _cli_options_map_init ()
     {
+      _cli_options_map_["--no-window"] =
+      &::mine::cli::thunk< options, &options::no_window_ >;
       _cli_options_map_["--help"] =
       &::mine::cli::thunk< options, &options::help_ >;
       _cli_options_map_["--version"] =
@@ -696,3 +703,4 @@ namespace mine
 //
 //
 // End epilogue.
+

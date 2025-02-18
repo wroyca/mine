@@ -1,5 +1,6 @@
 #include <libmine/mine.hxx>
 #include <libmine/version.hxx>
+#include <libmine/window.hxx>
 
 #include <print>
 #include <iostream>
@@ -32,6 +33,9 @@ namespace mine
           println ("mine {}", LIBMINE_VERSION_STR);
           return;
         }
+
+        create_window (ops.no_window() ? window_type::terminal
+                                       : window_type::gtk)->run();
       }
 
       // Handle unknown options.
