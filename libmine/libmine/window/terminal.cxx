@@ -219,21 +219,45 @@ namespace mine
       // Up arrow.
       //
       case 'A':
+        if (cursor_line > 0)
+        {
+          cursor_line--;
+          if (cursor_column > b.line(cursor_line).size())
+            cursor_column = b.line(cursor_line).size();
+          render();
+        }
         return true;
 
       // Down arrow.
       //
       case 'B':
+        if (cursor_line < b.line_count() - 1)
+        {
+          cursor_line++;
+          if (cursor_column > b.line(cursor_line).size())
+            cursor_column = b.line(cursor_line).size();
+          render();
+        }
         return true;
 
       // Right arrow.
       //
       case 'C':
+        if (cursor_column < b.line(cursor_line).size())
+        {
+          cursor_column++;
+          render();
+        }
         return true;
 
       // Left arrow.
       //
       case 'D':
+        if (cursor_column > 0)
+        {
+          cursor_column--;
+          render();
+        }
         return true;
       }
     }
