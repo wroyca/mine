@@ -1,12 +1,10 @@
 #include <libmine/buffer.hxx>
 
-using namespace std;
-
 namespace mine
 {
   buffer::
   buffer ()
-    : lines (immer::vector<std::string>{std::string{}})
+    : lines (immer::vector {string{}})
   {
   }
 

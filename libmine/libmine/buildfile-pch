@@ -1,0 +1,57 @@
+# This buildfile setup mine’s precompiled headers (PCH).
+#
+# Precompiled headers are meant to improve overall compile times for projects,
+# so the design of precompiled headers is entirely driven by performance
+# concerns.
+#
+# The use case for precompiled headers is relatively simple: when there is a
+# common set of headers that is included in nearly every source file in the
+# project, we precompile that bundle of headers into a single precompiled
+# header (PCH file).
+#
+# Then, when compiling the source files in the project, we load the PCH file
+# first (as a prefix header), which acts as a stand-in for that bundle of
+# headers.
+
+file{mine-pch.hxx.gch}: hxx{mine-pch}
+{{
+  i = $path($<[0])
+  o = $path($>[0])
+
+  poptions = $cxx.poptions $config.cc.poptions
+  coptions = $cxx.coptions $config.cc.coptions
+
+  diag pch $<
+
+  $cxx.path $poptions $coptions $cxx.mode -c $i -o $o
+}}
+
+if ($src_base != $out_base)
+{
+  hxx{mine-pch}:
+  % update
+  {{
+    ln -s $src_base/$name($>).hxx $out_base/$name($>).hxx
+  }}
+}
+
+[rule_hint=cxx] liba{mine-pch}: file{mine-pch.hxx.gch}:
+{
+  # Inform targets that we will manually handle prerequisites.
+  #
+  include = adhoc
+
+  # Build the PCH prior to any source that relies on it.
+  #
+  update = match
+}
+
+[rule_hint=cxx] liba{mine-pch}: file{mine-pch.hxx.gch}
+{
+  cxx.export.poptions += -include libmine/mine-pch.hxx
+
+  # Warn if a precompiled header is found in the search path but cannot be
+  # used.
+  #
+  cxx.export.coptions += "-Winvalid-pch"
+}

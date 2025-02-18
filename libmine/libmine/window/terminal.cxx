@@ -6,8 +6,6 @@
 
 #include <sys/ioctl.h>
 
-using namespace std;
-
 namespace mine
 {
   terminal::

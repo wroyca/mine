@@ -1,7 +1,5 @@
 #include <libmine/window/gtk.hxx>
 
-using namespace std;
-
 namespace mine
 {
   gtk::

@@ -5,9 +5,15 @@ import intf_libs += libadwaita%lib{adwaita-1}
 import intf_libs += libepoxy%lib{epoxy}
 import intf_libs += libimmer%lib{immer}
 
-./: lib{mine}: {hxx ixx txx cxx}{** -mine -version} \
-               {hxx            }{          version} \
-               {hxx ixx     cxx}{    mine         } $impl_libs $intf_libs
+# Precompiled headers.
+#
+source       buildfile-pch
+intf_libs += liba{mine-pch}
+
+./: lib{mine}: {hxx ixx txx cxx}{** -mine-pch -mine -version} \
+               {hxx            }{                    version} \
+               {hxx ixx     cxx}{              mine         } \
+  $impl_libs $intf_libs
 
 hxx{version}: in{version} $src_root/manifest
 

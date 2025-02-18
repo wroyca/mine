@@ -42,7 +42,7 @@ namespace mine
     // Creates and shows window, then runs GTK main loop. Blocks until
     // window is closed.
     //
-    // Throws std::runtime_error if GTK application fail to initialize.
+    // Throws runtime_error if GTK application fail to initialize.
     //
     void
     run () override;

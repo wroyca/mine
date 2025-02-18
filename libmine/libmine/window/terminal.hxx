@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdlib>
-
 #include <termios.h>
 
 #include <libmine/window.hxx>
@@ -29,7 +27,7 @@ namespace mine
 
     // Run terminal event loop. Blocks until 'q' is pressed.
     //
-    // Throws std::runtime_error if terminal setup fails.
+    // Throws runtime_error if terminal setup fails.
     //
     void
     run () override;
@@ -42,7 +40,7 @@ namespace mine
   private:
     // Set up raw terminal mode.
     //
-    // Throws std::runtime_error if terminal attributes cannot be set.
+    // Throws runtime_error if terminal attributes cannot be set.
     //
     void
     setup_modes ();
