@@ -405,4 +405,6 @@ namespace mine
   using std::nullopt;
   using std::pair;
   using std::make_pair;
+  using std::from_chars;
+  using std::errc;
 }
