@@ -3,7 +3,7 @@ name: mine
 version: 0.1.0-a.0.z
 type: other
 language: c++
-summary: text editor
+summary: Text editor
 license: GPL-3.0-or-later ; GNU General Public License v3.0 or later
 description-file: README.md
 url: https://github.com/wroyca/mine
@@ -11,6 +11,7 @@ email: wroy@proton.me
 # build-error-email: wroy@proton.me
 depends: * build2 >= 0.17.0
 depends: * bpkg >= 0.17.0
+depends: lua >= 5.4.7
 
 # Binary distributions packages.
 #
