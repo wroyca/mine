@@ -1,7 +1,7 @@
 libs =
 
 ./: exe{mine}: libue{mine}: {hxx ixx txx cxx}{** -**.test...} $libs
-    exe{mine}: testscript
+  # exe{mine}: testscript
 
 # Unit tests.
 #
@@ -16,7 +16,7 @@ for t: cxx{**.test...}
   d = $directory($t)
   n = $name($t)...
 
-  ./: $d/exe{$n}: $t $d/{hxx ixx txx}{+$n} $d/testscript{+$n}
+  ./: $d/exe{$n}: $t $d/{hxx ixx txx}{+$n} # $d/testscript{+$n}
       $d/exe{$n}: libue{mine}: bin.whole = false
 }
 

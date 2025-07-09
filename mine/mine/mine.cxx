@@ -1,15 +1,21 @@
-#include <iostream>
+#include <mine/terminal.hxx>
+
+#ifndef _WIN32
+#  include <unistd.h>
+#else
+#  include <mine/win32-utility.hxx>
+#endif
 
 int
 main (int argc, char* argv[])
 {
-  using namespace std;
+  using namespace mine;
 
-  if (argc < 2)
-  {
-    cerr << "error: missing name" << endl;
-    return 1;
-  }
+#ifdef _WIN32
+  terminal_handle h = GetStdHandle (STD_OUTPUT_HANDLE);
+#else
+  terminal_handle h = STDOUT_FILENO;
+#endif
 
-  cout << "Hello, " << argv[1] << '!' << endl;
+  terminal t (h);
 }
