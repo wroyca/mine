@@ -8,6 +8,9 @@ on:
       - 'www/mine.html'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: deploy-docs
   cancel-in-progress: false
