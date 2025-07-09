@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'www/mine.html'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
+
+jobs:
+  sync-docs:
+    name: Deploy Documentation to GitHub Pages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # required for full branch history and ref switching
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare Documentation Artifacts
+        run: |
+          mkdir -p ~/docs-staging
+          cp www/mine.html ~/docs-staging/index.html
+          cp www/mine.css ~/docs-staging/
+
+      - name: Switch to gh-pages Branch
+        run: |
+          git checkout gh-pages
+
+      - name: Update Documentation
+        run: |
+          mkdir -p docs
+          cp -r ~/docs-staging/* docs/
+          git add docs/
+
+          if git diff --staged --quiet; then
+            echo "No changes to documentation detected."
+          else
+            git commit -m "Sync documentation from main branch"
+            git push origin gh-pages
+          fi
+
+      - name: Report Deployment Failure
+        if: failure()
+        run: |
+          echo "::error title=Deployment Failed::The documentation sync to gh-pages failed."
