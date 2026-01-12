@@ -5,3 +5,6 @@ summary: mine text editor
 license: GPL-3.0-or-later ; GNU General Public License v3.0 or later.
 depends: * build2 >= 0.18.0-
 depends: * bpkg >= 0.18.0-
+depends: libboost-asio >= 1.87.0
+depends: libcpptrace
+depends: libimmer >= 0.8.1

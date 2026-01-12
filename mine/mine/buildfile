@@ -1,6 +1,8 @@
 libs =
-#import libs += libhello%lib{hello}
+import libs += libboost-asio%lib{boost_asio}
+import libs += libcpptrace%lib{cpptrace}
+import libs += libimmer%lib{immer}
 
-exe{mine}: {hxx ixx txx cxx}{**} $libs testscript
+exe{mine}: {hxx ixx txx cxx}{**} $libs
 
 cxx.poptions =+ "-I$out_root" "-I$src_root"
