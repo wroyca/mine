@@ -1,6 +1,6 @@
 #pragma once
 
-#include <algorithm> // min, max
+#include <algorithm> // std::min
 #include <optional>
 
 #include <mine/mine-types.hxx>
@@ -11,11 +11,16 @@ namespace mine
 {
   // The Viewport.
   //
-  // This defines the window through which we see the buffer. It maps "buffer
-  // space" (infinite vertical scroll) to "screen space" (fixed rows).
+  // This class defines the "window" through which the user looks at the
+  // buffer. It maps the infinite vertical space of the buffer (line numbers)
+  // to the fixed physical rows of the terminal screen.
   //
-  // Like everything else in the core, this is immutable. Scrolling returns
-  // a new view.
+  // Note that this is purely about vertical scrolling (lines). We don't
+  // currently handle horizontal scrolling (columns) here because we wrap
+  // lines.
+  //
+  // Like the rest of the core, this is immutable. A scroll operation doesn't
+  // change the view in-place; it returns a new view instance.
   //
   class view
   {
@@ -28,7 +33,7 @@ namespace mine
     {
     }
 
-    // Accessors.
+    // Accessors
     //
 
     line_number
@@ -46,27 +51,29 @@ namespace mine
     std::size_t
     height () const noexcept
     {
-      // Reserve one row for the status line.
+      // Reserve one row at the bottom for the status line.
       //
-      // @@: Hardcoding this is obviously the wrong approach, but
-      // it will do until we implement proper view composition.
+      // @@ TODO: Hardcoding this deduction here is architecturally suspicious.
+      // Ideally, the "screen size" passed to us should be the *content* area
+      // size, calculated by the parent window manager, rather than us knowing
+      // about UI chrome. But it works for now.
       //
       return sz_.rows > 0 ? sz_.rows - 1 : 0;
     }
 
-    // Hit testing / Coordinate mapping.
+    // Coordinate Mapping
     //
 
     bool
     contains (line_number l) const noexcept
     {
-      return l.value >= top_.value &&
-             l.value < top_.value + height ();
+      std::size_t h (height ());
+      return l.value >= top_.value && l.value < top_.value + h;
     }
 
-    // Map a buffer line index to a screen row (0-based relative to the view).
+    // Map an absolute buffer line index to a relative screen row (0-based).
     //
-    // Returns nullopt if the line is currently scrolled out of view.
+    // Returns nullopt if the line is currently scrolled out of the viewport.
     //
     std::optional<std::uint16_t>
     screen_row (line_number l) const noexcept
@@ -77,62 +84,66 @@ namespace mine
       return static_cast<std::uint16_t> (l.value - top_.value);
     }
 
-    // Scrolling.
+    // Scrolling Logic
     //
 
-    // Adjust the viewport so that the cursor `c` becomes visible.
+    // Adjust the viewport so that the given cursor becomes visible.
     //
-    // The logic here is "minimal movement":
+    // This implements the standard "minimal movement" strategy used by most
+    // editors:
     //
-    // 1. If the cursor is above the top, move top up to the cursor.
-    // 2. If the cursor is below the bottom, move top down just enough to
-    //    show it.
-    // 3. Finally, clamp everything so we don't show empty space past EOF
-    //    unless the file is actually shorter than the screen.
+    // 1. If the cursor is already visible, don't move.
+    // 2. If the cursor is above the top edge, pull the top edge up to the
+    //    cursor.
+    // 3. If the cursor is below the bottom edge, pull the bottom edge down
+    //    to the cursor.
     //
     view
     scroll_to_cursor (const cursor& c, const text_buffer& b) const noexcept
     {
       line_number l (c.line ());
-      line_number new_top (top_);
+      line_number nt (top_); // new top
+      std::size_t h (height ());
 
-      // Cursor is above us?
+      // Case 1: Cursor is above the viewport.
       //
       if (l.value < top_.value)
-        new_top = l;
-
-      // Cursor is below us?
-      //
-      else if (l.value >= top_.value + height ())
       {
-        // Example: Height 24. Cursor at 30.
-        //
-        // We want 30 to be the last visible line.
-        //
-        // New top = 30 - 24 + 1 = 7.
-        // Visible: 7..30 (24 lines).
-        //
-        new_top = line_number (l.value - height () + 1);
+        nt = l;
+      }
+      // Case 2: Cursor is below the viewport.
+      //
+      // Example: If height is 24 and cursor is at line 30, we want line 30
+      // to be the last visible line. So the top must be 30 - 24 + 1 = 7.
+      // Range: [7...30] (24 lines).
+      //
+      else if (l.value >= top_.value + h)
+      {
+        nt = line_number (l.value - h + 1);
       }
 
-      // Clamp.
+      // Clamping.
       //
-      // We generally don't want to scroll past the end of the file (leaving
-      // half the screen blank) if we have enough content to fill the screen.
+      // We generally want to avoid scrolling past the end of the file (which
+      // would leave the bottom half of the screen blank), unless the file
+      // itself is shorter than the screen height.
       //
       std::size_t max_top (0);
-      if (b.line_count () > height ())
-        max_top = b.line_count () - height ();
 
-      new_top = line_number (std::min (new_top.value, max_top));
+      if (b.line_count () > h)
+        max_top = b.line_count () - h;
 
-      return view (new_top, sz_);
+      // Apply the clamp.
+      //
+      nt = line_number (std::min (nt.value, max_top));
+
+      return view (nt, sz_);
     }
 
-    // Manual scrolling (PageUp/Down, arrow keys).
+    // Manual scrolling (e.g., PgUp/PgDn/Arrows).
     //
     view
-    scroll_up (std::size_t n, const text_buffer& b) const noexcept
+    scroll_up (std::size_t n, const text_buffer& /*b*/) const noexcept
     {
       if (top_.value == 0)
         return *this;
@@ -144,19 +155,30 @@ namespace mine
     view
     scroll_down (std::size_t n, const text_buffer& b) const noexcept
     {
-      // Calculate the maximum valid top line.
-      //
+      std::size_t h (height ());
       std::size_t max_top (0);
-      if (b.line_count () > height ())
-        max_top = b.line_count () - height ();
+
+      // Determine the lowest valid top line index.
+      //
+      if (b.line_count () > h)
+        max_top = b.line_count () - h;
 
       std::size_t t (std::min (top_.value + n, max_top));
       return view (line_number (t), sz_);
     }
 
+    // Resize the viewport (e.g., terminal resize event).
+    //
     view
     resize (screen_size s) const noexcept
     {
+      // We just update the size but keep the top anchor.
+      //
+      // Note: A smarter implementation might try to adjust 'top' to keep the
+      // cursor centered or visible if the resize caused it to fall off, but
+      // we leave that to the main loop (which usually calls scroll_to_cursor
+      // immediately after a resize anyway).
+      //
       return view (top_, s);
     }
 

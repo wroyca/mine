@@ -1,5 +1,6 @@
 #include <mine/mine-terminal-render.hxx>
 #include <mine/mine-assert.hxx>
+#include <mine/mine-unicode-grapheme-iterator.hxx>
 
 #include <iostream>
 #include <sstream>
@@ -9,25 +10,31 @@ using namespace std;
 
 namespace mine
 {
-  // High-level rendering logic.
-  //
-
   void terminal_renderer::
   render (const editor_state& s)
   {
-    // Hide cursor during rendering to prevent flickering.
+    // First, let's hide the cursor.
+    //
+    // If we leave it on while blasting ANSI codes, it might jump around the
+    // screen or flicker, which looks terrible. We'll turn it back on at the
+    // exact right spot when we are done.
     //
     hide_cursor ();
 
-    // We employ a double-buffering strategy here. We build the "ideal" next
-    // frame in memory, compute the minimal set of changes required to transform
-    // the current terminal state into that ideal state, and then issue only
-    // those updates.
+    // Architecture: Double Buffering.
+    //
+    // We don't write directly to stdout. Instead, we build the "perfect"
+    // version of what the screen *should* look like in memory (`next`). Then we
+    // compare it to what we *think* is currently on screen (`current_screen_`).
+    //
+    // The idea here is to compute a minimal "diff" (e.g., "only char at 10,10
+    // changed").
     //
     terminal_screen next (build_screen (s));
 
-    // If the window resized between frames, our current screen state is
-    // invalid. Just reset it and draw everything.
+    // Handle terminal resize events that might have happened since the last
+    // frame. If sizes mismatch, our "current" knowledge is garbage, so we
+    // nuke it.
     //
     if (next.size () != current_screen_.size ())
     {
@@ -43,9 +50,8 @@ namespace mine
       current_screen_ = move (next);
     }
 
-    // Always make sure the hardware cursor matches the logical cursor at the
-    // end of the frame. position_cursor will show/hide the cursor based on
-    // whether it's in view.
+    // Now that the paint is dry, put the hardware cursor where the logical
+    // cursor is.
     //
     position_cursor (s);
     last_cursor_pos_ = s.get_cursor ().position ();
@@ -56,9 +62,11 @@ namespace mine
   void terminal_renderer::
   render_cursor_only (const editor_state& s)
   {
-    // Optimization for simple navigation. If we know only the cursor moved
-    // and no content changed, we skip the expensive screen build/diff cycle.
-    // position_cursor will show/hide the cursor based on whether it's in view.
+    // Optimization: "I know I just moved the cursor."
+    //
+    // If the user just hit an arrow key, re-building the whole screen and
+    // diffing it is overkill (even if the diff turns out empty). We just
+    // update the hardware cursor position.
     //
     hide_cursor ();
     position_cursor (s);
@@ -70,8 +78,11 @@ namespace mine
   void terminal_renderer::
   force_redraw (const editor_state& s)
   {
-    // Sometimes the terminal state gets desynchronized (e.g., external program
-    // output, network glitch). This is the "nuke it from orbit" option.
+    // The "Panic Button".
+    //
+    // Use this when the screen looks corrupted (e.g., some background job
+    // printed garbage to stdout, or a network glitch messed up escape codes).
+    // We discard our knowledge of the current state and force a full paint.
     //
     clear_screen ();
     current_screen_.clear ();
@@ -83,26 +94,55 @@ namespace mine
   void terminal_renderer::
   resize (screen_size s)
   {
-    // We don't actually draw here; we just resize our internal buffer so the
-    // next render() call knows what canvas size to work with.
+    // We don't draw immediately on resize signals (SIGWINCH). We just update
+    // our internal geometry so the next `render()` call builds the correct
+    // size buffer.
     //
     current_screen_ = current_screen_.resize (s);
   }
 
-  // Screen construction.
+  // Screen Construction
   //
+
+  // Helper: Guess how wide a grapheme is on screen.
+  //
+  // This is one of the hardest problems in TUI programming. We think a
+  // character is 1 column, but the terminal (xterm, iterm2, etc.) might
+  // render it as 2 columns (emoji, CJK) or 0 columns (combining marks).
+  //
+  // If we guess wrong, our rendering desyncs from the terminal's.
+  //
+  static int
+  estimate_grapheme_width (string_view g)
+  {
+    if (g.empty ())
+      return 0;
+
+    // Fast path: ASCII is always 1.
+    //
+    unsigned char first (static_cast<unsigned char> (g[0]));
+    if (first < 0x80)
+      return 1;
+
+    // Heuristic:
+    // 0xE0-0xEF: 3-byte sequences (often CJK -> Wide).
+    // 0xF0-0xFF: 4-byte sequences (often Emoji -> Wide).
+    //
+    // TODO: This is a hack. We should use a proper `wcwidth` implementation
+    // or look up the Unicode East Asian Width property.
+    //
+    if (first >= 0xE0)
+      return 2;
+
+    return 1;
+  }
 
   terminal_screen terminal_renderer::
   build_screen (const editor_state& s) const
   {
     terminal_screen scr (current_screen_.size ());
 
-    // Draw the actual file content.
-    //
     draw_buffer (scr, s);
-
-    // Overlay the UI elements (status line, etc).
-    //
     draw_status_line (scr, s);
 
     return scr;
@@ -111,43 +151,63 @@ namespace mine
   void terminal_renderer::
   draw_buffer (terminal_screen& scr, const editor_state& s) const
   {
-    const text_buffer& buf (s.buffer ());
-    const class view& view (s.view ());
-    screen_size size (scr.size ());
+    const auto& buf (s.buffer ());
+    const auto& v (s.view ());
+    auto sz (scr.size ());
 
-    // Reserve the bottom row for the status line.
+    // Leave room for status line.
     //
-    uint16_t rows (size.rows > 0 ? size.rows - 1 : 0);
+    uint16_t rows (sz.rows > 0 ? sz.rows - 1 : 0);
 
     for (uint16_t r (0); r < rows; ++r)
     {
-      line_number ln (view.top ().value + r);
+      line_number ln (v.top ().value + r);
 
-      // If we are past the end of the file, draw the classic vim-style tilde.
+      // Past EOF? Draw the "empty void" tilde.
       //
       if (ln.value >= buf.line_count ())
       {
         scr.set_char (screen_position (r, 0),
                       '~',
-                      cell_attributes {.fg_color = 12}); // Bright Blue.
+                      cell_attributes {.fg = 12}); // Bright Blue
         continue;
       }
 
-      const auto& line (buf.line_at (ln));
+      const auto& l (buf.line_at (ln));
+      auto txt (l.view ());
 
-      // Simple rendering: just copy chars until we hit the screen edge.
+      if (l.count () == 0)
+        continue;
+
+      // Rendering Text.
       //
-      // TODO: Handle multibyte characters and grapheme clusters correctly.
-      // Currently, we assume 1 byte == 1 column, which is wrong for UTF-8.
+      // We iterate logically (graphemes), but we must place them physically
+      // (columns).
       //
-      uint16_t c (0);
-      for (char ch : line)
+      uint16_t col (0);
+
+      const auto& seg (l.idx.get_segmentation ());
+      grapheme_iterator it (&seg, 0);
+      grapheme_iterator end (&seg, seg.size ());
+
+      for (; it != end && col < sz.cols; ++it)
       {
-        if (c >= size.cols)
+        auto g (it->text (txt));
+        int w (estimate_grapheme_width (g));
+
+        if (w <= 0) w = 1;
+
+        // Clip if it doesn't fit on the line.
+        //
+        if (col + static_cast<uint16_t> (w) > sz.cols)
           break;
 
-        scr.set_char (screen_position (r, c), ch);
-        ++c;
+        scr.set_grapheme (screen_position (r, col),
+                          g,
+                          cell_attributes {},
+                          w == 2);
+
+        col += static_cast<uint16_t> (w);
       }
     }
   }
@@ -155,13 +215,13 @@ namespace mine
   void terminal_renderer::
   draw_status_line (terminal_screen& scr, const editor_state& s) const
   {
-    screen_size size (scr.size ());
-    if (size.rows == 0)
+    auto sz (scr.size ());
+    if (sz.rows == 0)
       return;
 
-    uint16_t row (size.rows - 1);
+    uint16_t row (sz.rows - 1);
 
-    // Format: " Line X, Col Y [Modified]"
+    // Build status string: " Line X, Col Y [Modified]"
     //
     string st;
     st.reserve (64);
@@ -174,14 +234,12 @@ namespace mine
     if (s.modified ())
       st += " [Modified]";
 
-    // Truncate the status line to fit terminal width.
-    //
-    if (st.size () > size.cols)
-      st.resize (size.cols);
+    if (st.size () > sz.cols)
+      st.resize (sz.cols);
 
-    // Render inverted (black on white/grey).
+    // Render inverted (Black on Grey).
     //
-    cell_attributes attr {.fg_color = 0, .bg_color = 7};
+    cell_attributes attr {.fg = 0, .bg = 7};
 
     uint16_t c (0);
     for (char ch : st)
@@ -190,49 +248,55 @@ namespace mine
       ++c;
     }
 
-    // Pad the rest of the line with empty space to maintain the background
-    // color.
+    // Fill rest of line with background color.
     //
-    while (c < size.cols)
+    while (c < sz.cols)
     {
       scr.set_char (screen_position (row, c), ' ', attr);
       ++c;
     }
   }
 
-  // Low-level output (ANSI sequences).
+  // Low-level Output (ANSI)
   //
 
   void terminal_renderer::
-  apply_diff (const screen_diff& diff)
+  apply_diff (const screen_diff& d)
   {
-    cell_attributes curr_attr;
+    cell_attributes cur_attr;
     bool attr_set (false);
 
-    // Iterate through the minimal set of changes.
+    // The Diff Applicator.
     //
-    // Note: This is currently suboptimal for long runs of text because we
-    // move the cursor for *every* changed cell in the diff. A smarter diff
-    // would group contiguous changes into strings.
+    // We iterate through the list of changed cells.
     //
-    for (const auto& change : diff.changes)
+    // Performance Note:
+    //
+    // Ideally, we would detect contiguous runs of changes and emit a single
+    // string print rather than jumping the cursor for every single cell. But
+    // for now, correctness first.
+    //
+    for (const auto& c : d.changes)
     {
-      move_cursor (change.pos);
+      // Wide chars (like kanji) take 2 cells. The second cell is a "dummy"
+      // continuation. We skip it because drawing the first one fills both.
+      //
+      if (c.cell.wide_continuation)
+        continue;
 
-      if (!attr_set || curr_attr != change.cell.attrs)
+      move_cursor (c.pos);
+
+      if (!attr_set || cur_attr != c.cell.attrs)
       {
-        set_attributes (change.cell.attrs);
-        curr_attr = change.cell.attrs;
+        set_attributes (c.cell.attrs);
+        cur_attr = c.cell.attrs;
         attr_set = true;
       }
 
-      // TODO: Buffer this?
-      //
-      cout.put (change.cell.ch);
+      write (c.cell.text);
     }
 
-    // Always reset attributes at the end to avoid leaking style into the
-    // shell if we crash.
+    // Always clean up styles so we don't mess up the user's prompt after exit.
     //
     write ("\x1b[0m");
   }
@@ -240,63 +304,82 @@ namespace mine
   void terminal_renderer::
   position_cursor (const editor_state& s)
   {
-    const class view& view (s.view ());
-    const cursor& cur (s.get_cursor ());
+    const auto& v (s.view ());
+    const auto& c (s.get_cursor ());
+    const auto& buf (s.buffer ());
 
-    // Map the logical buffer position to the physical screen row.
+    // Convert Logical (Line, Grapheme) -> Physical (Screen Row, Screen Col).
     //
-    auto row (view.screen_row (cur.line ()));
+    auto row (v.screen_row (c.line ()));
 
     if (row)
     {
-      screen_position pos (*row, cur.column ().value);
-      move_cursor (pos);
+      // To find the physical column, we have to sum the display widths of
+      // every grapheme before the cursor. This is O(N) on line length.
+      //
+      uint16_t screen_col (0);
+
+      if (c.column ().value > 0)
+      {
+        const auto& l (buf.line_at (c.line ()));
+        auto txt (l.view ());
+
+        std::size_t idx (0);
+        for (grapheme_iterator it (&l.idx.get_segmentation (), 0);
+             it != grapheme_iterator () && idx < c.column ().value;
+             ++it, ++idx)
+        {
+          auto g (it->text (txt));
+          int w (estimate_grapheme_width (g));
+          if (w <= 0) w = 1;
+
+          screen_col += static_cast<uint16_t> (w);
+        }
+      }
+
+      move_cursor (screen_position (*row, screen_col));
       show_cursor ();
     }
     else
     {
-      // Cursor is out of view, hide it.
+      // If the logical cursor is scrolled off-screen, just hide the hardware
+      // cursor so it doesn't mislead the user.
       //
       hide_cursor ();
     }
   }
 
   void terminal_renderer::
-  move_cursor (screen_position pos)
+  move_cursor (screen_position p)
   {
-    // ANSI is 1-based.
-    // ESC [ <row> ; <col> H
+    // ANSI CUP: ESC [ <row> ; <col> H (1-based)
     //
     write ("\x1b[" +
-           to_string (pos.row + 1) + ';' +
-           to_string (pos.col + 1) + 'H');
+           to_string (p.row + 1) + ';' +
+           to_string (p.col + 1) + 'H');
   }
 
   void terminal_renderer::
-  set_attributes (cell_attributes attr)
+  set_attributes (cell_attributes a)
   {
     ostringstream oss;
-    oss << "\x1b[0"; // Start with reset.
+    oss << "\x1b[0"; // Reset
 
-    if (attr.bold)      oss << ";1";
-    if (attr.italic)    oss << ";3";
-    if (attr.underline) oss << ";4";
+    if (a.bold)      oss << ";1";
+    if (a.italic)    oss << ";3";
+    if (a.underline) oss << ";4";
 
-    // Colors:
-    // 30-37: Standard FG
-    // 90-97: Bright FG
-    // 40-47: Standard BG
-    // 100-107: Bright BG
+    // Standard vs Bright colors.
     //
-    if (attr.fg_color < 8)
-      oss << ";3" << static_cast<int> (attr.fg_color);
+    if (a.fg < 8)
+      oss << ";3" << static_cast<int> (a.fg);
     else
-      oss << ";9" << static_cast<int> (attr.fg_color - 8);
+      oss << ";9" << static_cast<int> (a.fg - 8);
 
-    if (attr.bg_color < 8)
-      oss << ";4" << static_cast<int> (attr.bg_color);
+    if (a.bg < 8)
+      oss << ";4" << static_cast<int> (a.bg);
     else
-      oss << ";10" << static_cast<int> (attr.bg_color - 8);
+      oss << ";10" << static_cast<int> (a.bg - 8);
 
     oss << 'm';
     write (oss.str ());
@@ -305,9 +388,6 @@ namespace mine
   void terminal_renderer::
   clear_screen ()
   {
-    // \x1b[2J: Clear entire screen.
-    // \x1b[H:  Move cursor to top-left (1,1).
-    //
     write ("\x1b[2J\x1b[H");
   }
 
@@ -320,16 +400,12 @@ namespace mine
   void terminal_renderer::
   hide_cursor ()
   {
-    // ANSI escape code: ESC [ ? 25 l (DECTCEM - hide cursor)
-    //
     write ("\x1b[?25l");
   }
 
   void terminal_renderer::
   show_cursor ()
   {
-    // ANSI escape code: ESC [ ? 25 h (DECTCEM - show cursor)
-    //
     write ("\x1b[?25h");
   }
 }

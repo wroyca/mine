@@ -1,71 +1,144 @@
 #pragma once
 
 #include <string>
-#include <string_view>
+#include <vector>
+#include <utility>
 #include <optional>
-#include <utility> // move
+#include <string_view>
 
 #include <immer/vector.hpp>
 #include <immer/flex_vector.hpp>
 
 #include <mine/mine-types.hxx>
 #include <mine/mine-assert.hxx>
+#include <mine/mine-unicode-grapheme-index.hxx>
 
 namespace mine
 {
-  // The persistent text buffer core.
+  // The core persistent text buffer.
   //
-  // Unlike traditional editors (like Emacs) that rely on gap buffers or ropes
-  // (which are inherently mutable), we use persistent data structures via the
-  // `immer` library.
+  // We are building this editor around the concept of immutable data
+  // structures (using the immer library). This might seem heavy for a simple
+  // text buffer, but it gives us structural sharing for free. This means we
+  // can keep a history of the entire buffer state for undo/redo without
+  // actually copying the text string every time the user types a character.
   //
-  // The data model is a "vector of vectors":
+  // The second architectural pillar here is "Grapheme First". Most C++
+  // strings are byte-oriented, or at best code-point oriented. But users
+  // see grapheme clusters (e.g., a flag emoji or a character with an accent).
   //
-  //   flex_vector< flex_vector<char> >
-  //
-  // While a gap buffer offers O(1) insertion at the cursor, it makes
-  // implementing reliable undo/redo and asynchronous rendering quite painful.
-  //
-  // Instead we use persistent vectors (RB-tree based), which trade some raw
-  // single-thread throughput for architectural simplicity:
-  //
-  // 1. Structural Sharing: Modifying a line creates a new path in the RB-tree,
-  //    sharing the vast majority of memory with the previous version. We rarely
-  //    copy actual text.
-  //
-  // 2. Trivial Undo/Redo: The undo stack is just `vector<text_buffer>`. We
-  //    store snapshots, not reverse-deltas.
-  //
-  // 3. Lock-Free Reads: The rendering thread can read version N of the buffer
-  //    while the input thread is busy computing version N+1.
+  // If we split a cluster, we break the rendering. So, while we store UTF-8
+  // bytes physically, all our logical coordinates (lines and columns) refer
+  // to grapheme indices.
   //
   class text_buffer
   {
   public:
-    // We use `flex_vector` for lines because we need efficient slicing and
-    // concatenation capabilities to handle the "Enter" key (splitting lines)
-    // and range deletions (merging lines).
+    // A single line of text.
     //
-    using line_type = immer::flex_vector<char>;
-    using lines_type = immer::flex_vector<line_type>;
+    // We wrap the raw storage to maintain a cached grapheme index. We made
+    // the index `mutable` because calculating grapheme boundaries is
+    // expensive (linear scan of UTF-8), so we want to compute it lazily or
+    // update it behind the scenes. It's logically part of the line's "value",
+    // but physically it's just a derived cache.
+    //
+    struct line
+    {
+      immer::flex_vector<char> data;
+      mutable grapheme_index   idx;
 
-    // Invariant: The buffer must always contain at least one line.
-    //
-    // We represent a conceptually "empty file" as a buffer containing exactly
-    // one empty line: `[ [] ]`.
+      line () = default;
+
+      explicit
+      line (immer::flex_vector<char> d)
+          : data (std::move (d))
+      {
+        // We have to build the index immediately upon construction because
+        // the rest of the system assumes line_length() is cheap and valid.
+        //
+        update_idx ();
+      }
+
+      explicit
+      line (std::string_view s)
+          : data (s.begin (), s.end ())
+      {
+        update_idx ();
+      }
+
+      line (const line& x)
+          : data (x.data)
+      {
+        // When we copy a line, we can't necessarily trust that the source's
+        // index is movable or that we want to share the cache if the underlying
+        // implementation changes. Safe bet is to just rebuild it.
+        //
+        update_idx ();
+      }
+
+      line&
+      operator= (const line& x)
+      {
+        if (this != &x)
+        {
+          data = x.data;
+          update_idx ();
+        }
+        return *this;
+      }
+
+      line (line&&) noexcept = default;
+      line& operator= (line&&) noexcept = default;
+
+      bool
+      operator== (const line& x) const
+      {
+        // Equality is defined purely by content. If the text is the same,
+        // the grapheme boundaries are mathematically guaranteed to be the
+        // same.
+        //
+        return data == x.data;
+      }
+
+      std::string_view
+      view () const
+      {
+        return data.empty ()
+          ? std::string_view {}
+          : std::string_view (&data[0], data.size ());
+      }
+
+      void
+      update_idx ()
+      {
+        idx.update (view ());
+      }
+
+      std::size_t
+      count () const
+      {
+        return idx.size ();
+      }
+    };
+
+    using lines_type = immer::flex_vector<line>;
+
+    // We must ensure the buffer is never in an invalid state. An "empty" file
+    // technically contains one line with zero characters.
     //
     text_buffer ()
-        : lines_ ({line_type {}})
+      : lines_ ({line {}})
     {
     }
 
-    explicit text_buffer (lines_type ls)
+    explicit
+    text_buffer (lines_type ls)
         : lines_ (std::move (ls))
     {
       MINE_INVARIANT (!lines_.empty ());
     }
 
-    // Queries.
+    // Queries
     //
 
     std::size_t
@@ -74,13 +147,16 @@ namespace mine
       return lines_.size ();
     }
 
+    // Check bounds. Usually called by assertions, but sometimes useful for
+    // cursor validation logic in the UI layer.
+    //
     bool
     contains (line_number ln) const noexcept
     {
       return ln.value < lines_.size ();
     }
 
-    const line_type&
+    const line&
     line_at (line_number ln) const
     {
       MINE_PRECONDITION (contains (ln));
@@ -91,80 +167,156 @@ namespace mine
     line_length (line_number ln) const
     {
       MINE_PRECONDITION (contains (ln));
-      return lines_[ln.value].size ();
+      return lines_[ln.value].count ();
     }
 
-    // Safe character access.
+    // Retrieve the actual UTF-8 bytes for a specific grapheme.
     //
-    // Returns nullopt if the coordinates are out of bounds.
+    // This is useful for rendering or for inspecting what character is under
+    // the cursor. Note that we return a string_view into the immer storage,
+    // which is contiguous for small chunks but we should be careful if we
+    // ever switch to a chunked list implementation (though flex_vector handles
+    // this gracefully for now).
     //
-    std::optional<char>
-    char_at (cursor_position p) const noexcept
+    std::optional<std::string_view>
+    grapheme_at (cursor_position p) const
     {
       if (!contains (p.line))
         return std::nullopt;
 
       const auto& l (lines_[p.line.value]);
+      const auto* c (l.idx.cluster_at_index (p.column.value));
 
-      if (p.column.value >= l.size ())
+      if (c == nullptr)
         return std::nullopt;
 
-      return l[p.column.value];
+      return c->text (l.view ());
     }
 
-    // Mutations.
+    // Mutations (Pure)
     //
-    // All operations here are pure functions. They return a *new* buffer
-    // instance representing the state of the world after the edit. The
-    // current instance (`this`) remains untouched (and potentially referenced
-    // by the undo stack).
+    // In the spirit of functional programming, these functions are pure. They
+    // take the current state and a mutation request, and return a brand new
+    // `text_buffer` object. The old object remains valid (which is great for
+    // recursive operations or background saves).
     //
 
+    // Insert text into the middle of a line.
+    //
+    // This is a bit tricky because we have to map the high-level concept of
+    // "cursor column" (graphemes) down to the low-level reality of "byte
+    // offset" in the UTF-8 buffer.
+    //
     text_buffer
-    insert_char (cursor_position p, char c) const
+    insert_graphemes (cursor_position p, std::string_view s) const
     {
       MINE_PRECONDITION (contains (p.line));
-      MINE_PRECONDITION (p.column.value <= lines_[p.line.value].size ());
 
-      // In a gap buffer, we'd just slide memory. Here, we allocate a new
-      // string, mutate it, and then tell immer to update the pointer in the
-      // tree.
+      const auto& l (lines_[p.line.value]);
+      MINE_PRECONDITION (p.column.value <= l.count ());
+
+      // First, translate the logical grapheme index to a byte offset.
       //
-      return text_buffer (lines_.update (p.line.value,
-                                         [&] (auto l)
-      {
-        return l.insert (p.column.value, c);
-      }));
+      std::size_t n (l.idx.index_to_byte (p.column.value));
+
+      // Now we perform surgery on the immutable vector. We slice it into
+      // prefix (before cursor) and suffix (after cursor).
+      //
+      auto pre (l.data.take (n));
+      auto suf (l.data.drop (n));
+
+      immer::flex_vector<char> v (s.begin (), s.end ());
+
+      // Stitch it back together: prefix + new_text + suffix.
+      //
+      // The `line` constructor will run the grapheme segmentation algorithm
+      // on the result immediately.
+      //
+      auto t (pre + v + suf);
+      line nl (std::move (t));
+
+      // Replace the old line in the line-vector with our new one.
+      //
+      return text_buffer (lines_.set (p.line.value, std::move (nl)));
     }
 
+    // Handle the Backspace key.
+    //
+    // This has two distinct behaviors depending on where the cursor is. If
+    // we are inside a line, we just shrink that line. If we are at the far
+    // left edge (column 0), we have to merge the current line with the
+    // previous one.
+    //
     text_buffer
-    insert_string (cursor_position p, std::string_view s) const
+    delete_previous_grapheme (cursor_position p) const
     {
       MINE_PRECONDITION (contains (p.line));
-      MINE_PRECONDITION (p.column.value <= lines_[p.line.value].size ());
 
-      // It is unfortunate that `immer` doesn't strictly support range insertion
-      // on `flex_vector` yet. We have to loop.
+      // Case 1: Start of line -> Merge.
       //
-      // That said, since this is predominantly driven by human typing speed or
-      // relatively small clipboards, the O(M * log N) cost is acceptable for
-      // now. If this becomes a bottleneck for massive pastes, we can look into
-      // building a transient vector first.
-      //
-      return text_buffer (lines_.update (p.line.value,
-                                         [&] (auto l)
+      if (p.column.value == 0)
       {
-        for (std::size_t i (0); i < s.size (); ++i)
-          l = l.insert (p.column.value + i, s[i]);
+        if (p.line.value == 0)
+          return *this; // Top of file, nothing to delete.
 
-        return l;
-      }));
+        return merge_lines (line_number (p.line.value - 1), p.line);
+      }
+
+      // Case 2: Inside line -> Remove grapheme.
+      //
+      const auto& l (lines_[p.line.value]);
+
+      // We need to find exactly which bytes correspond to the grapheme
+      // *before* the cursor.
+      //
+      const auto* c (l.idx.cluster_at_index (p.column.value - 1));
+      MINE_INVARIANT (c != nullptr);
+
+      // Erase that byte range.
+      //
+      auto t (l.data.erase (c->byte_offset,
+                            c->byte_offset + c->byte_length));
+      line nl (std::move (t));
+
+      return text_buffer (lines_.set (p.line.value, std::move (nl)));
     }
 
-    // Split the current line at the cursor (The 'Enter' key).
+    // Handle the Delete key.
     //
-    // Physically, this turns Line N into [Left Part] and inserts [Right Part]
-    // at Line N+1.
+    // Symmetric to above, but looks forward. If we are at the end of the line,
+    // we merge with the next line (pulling it up).
+    //
+    text_buffer
+    delete_next_grapheme (cursor_position p) const
+    {
+      MINE_PRECONDITION (contains (p.line));
+
+      const auto& l (lines_[p.line.value]);
+
+      // Case 1: End of line -> Merge with next.
+      //
+      if (p.column.value >= l.count ())
+      {
+        if (p.line.value + 1 >= lines_.size ())
+          return *this; // End of file.
+
+        return merge_lines (p.line, line_number (p.line.value + 1));
+      }
+
+      // Case 2: Inside line -> Remove current grapheme.
+      //
+      const auto* c (l.idx.cluster_at_index (p.column.value));
+      MINE_INVARIANT (c != nullptr);
+
+      auto t (l.data.erase (c->byte_offset,
+                            c->byte_offset + c->byte_length));
+      line nl (std::move (t));
+
+      return text_buffer (lines_.set (p.line.value, std::move (nl)));
+    }
+
+    // This is essentially a "split" operation. We take the current line and
+    // break it into two separate lines at the cursor position.
     //
     text_buffer
     insert_newline (cursor_position p) const
@@ -172,137 +324,143 @@ namespace mine
       MINE_PRECONDITION (contains (p.line));
 
       const auto& l (lines_[p.line.value]);
-      MINE_PRECONDITION (p.column.value <= l.size ());
+      MINE_PRECONDITION (p.column.value <= l.count ());
 
-      // Slice the line. `take` and `drop` are O(log L) operations on the
-      // line vector.
-      //
-      line_type lhs (l.take (p.column.value));
-      line_type rhs (l.drop (p.column.value));
+      std::size_t n (l.idx.index_to_byte (p.column.value));
 
-      // Update the line tree.
+      // Slice the data.
       //
-      // 1. Replace the current line with just the left part.
-      // 2. Insert the right part as a new line immediately after.
+      auto lhs (l.data.take (n));
+      auto rhs (l.data.drop (n));
+
+      line ll (std::move (lhs));
+      line rl (std::move (rhs));
+
+      // Update structure:
+      //
+      // 1. Overwrite the current line with the left-hand side.
+      // 2. Insert the right-hand side as a new line immediately following.
       //
       auto r (lines_);
-      r = r.set (p.line.value, std::move (lhs));
-      r = r.insert (p.line.value + 1, std::move (rhs));
+      r = r.set (p.line.value, std::move (ll));
+      r = r.insert (p.line.value + 1, std::move (rl));
 
       return text_buffer (std::move (r));
     }
 
-    text_buffer
-    delete_char (cursor_position p) const
-    {
-      MINE_PRECONDITION (contains (p.line));
-
-      if (p.column.value >= lines_[p.line.value].size ())
-        return *this;
-
-      return text_buffer (lines_.update (p.line.value,
-                                         [&] (auto l)
-      {
-        return l.erase (p.column.value);
-      }));
-    }
-
-    // Delete a range of text, potentially spanning multiple lines.
+    // Delete a generic range of text.
     //
-    // The general algorithm ("clip and merge") is:
-    //
-    // 1. Keep the prefix of the start line [0, start_col).
-    // 2. Keep the suffix of the end line [end_col, EOL).
-    // 3. Merge them into a single line.
-    // 4. Remove all intermediate lines that were fully selected.
+    // This is the workhorse for selection deletion. It has to handle the nasty
+    // case where the user selects from the middle of line A to the middle of
+    // line Z.
     //
     text_buffer
     delete_range (cursor_position b, cursor_position e) const
     {
       MINE_PRECONDITION (b.line.value <= e.line.value);
-      MINE_PRECONDITION (b.line.value < lines_.size ());
-      MINE_PRECONDITION (e.line.value < lines_.size ());
+      MINE_PRECONDITION (contains (b.line));
+      MINE_PRECONDITION (contains (e.line));
 
-      // Optimization: If the range is entirely within one line, we don't
-      // need to touch the outer vector structure (no nodes added/removed),
-      // just update the content of one leaf.
+      // Optimization: If the range is contained entirely within a single line,
+      // we don't need to touch the line vector structure, just update one line.
       //
       if (b.line == e.line)
       {
         if (b.column == e.column)
-          return *this;
+          return *this; // Empty range.
 
-        auto n (e.column.value - b.column.value);
-        return text_buffer (lines_.update (b.line.value,
-                                           [&] (auto l)
-        {
-          return l.erase (b.column.value, n);
-        }));
+        const auto& l (lines_[b.line.value]);
+
+        std::size_t b_off (l.idx.index_to_byte (b.column.value));
+        std::size_t e_off (l.idx.index_to_byte (e.column.value));
+
+        auto t (l.data.erase (b_off, e_off));
+        line nl (std::move (t));
+
+        return text_buffer (lines_.set (b.line.value, std::move (nl)));
       }
 
-      // The multi-line case.
+      // Multi-line case.
       //
-      const auto& lb (lines_[b.line.value]);
-      const auto& le (lines_[e.line.value]);
+      // The strategy is:
+      //
+      // 1. Take the prefix of the first line (up to start-of-selection).
+      // 2. Take the suffix of the last line (from end-of-selection).
+      // 3. Glue them together into a single "fused" line.
+      // 4. Delete all the lines in between.
+      //
+      const auto& bl (lines_[b.line.value]);
+      const auto& el (lines_[e.line.value]);
 
-      // Slice out the parts we want to keep.
-      //
-      line_type pre (lb.take (b.column.value));
-      line_type suf (le.drop (e.column.value));
+      std::size_t b_off (bl.idx.index_to_byte (b.column.value));
+      std::size_t e_off (el.idx.index_to_byte (e.column.value));
 
-      // Join them. `operator+` on flex_vectors handles the tree rebalancing.
-      //
-      line_type j (pre + suf);
+      auto pre (bl.data.take (b_off));
+      auto suf (el.data.drop (e_off));
 
-      // Replace the start line with the joined result.
-      //
-      auto r (lines_.set (b.line.value, std::move (j)));
+      auto t (pre + suf);
+      line nl (std::move (t));
 
-      // Remove the lines that were "eaten" by the merge.
+      // Replace start line with the fused line.
       //
-      // The number of lines to remove is exactly (end_line - start_line).
+      auto r (lines_.set (b.line.value, std::move (nl)));
+
+      // Qestion: How many lines do we need to kill?
       //
-      // Example: Start line 10, End line 12.
+      // Answer: It's the diff between end and start.
       //
-      // 1. We merged contents of 10 and 12 into 10.
-      // 2. We effectively remove line 11 and the *old* line 12.
-      //
-      auto n (e.line.value - b.line.value);
+      std::size_t n (e.line.value - b.line.value);
+
       r = r.erase (b.line.value + 1, n);
 
       return text_buffer (std::move (r));
     }
 
-    // Append a fully formed line to the end of the buffer.
-    //
-    text_buffer
-    append_line (line_type l) const
+    const lines_type&
+    lines () const noexcept
     {
-      return text_buffer (lines_.push_back (std::move (l)));
+      return lines_;
     }
 
-    // Access to the raw container.
-    //
-    const lines_type&
-    lines () const noexcept { return lines_; }
-
-    // Structural equality.
-    //
-    // Thanks to structural sharing, if two buffers share the same root node,
-    // this check is O(1). If they are different but have identical content,
-    // it's O(N).
-    //
     bool
-    operator== (const text_buffer& o) const noexcept
+    operator== (const text_buffer& x) const noexcept
     {
-      return lines_ == o.lines_;
+      return lines_ == x.lines_;
     }
 
   private:
     lines_type lines_;
+
+    // Helper: Join two consecutive lines.
+    //
+    // This is used by backspace (at line start) and delete (at line end). It
+    // takes line N and N+1 and fuses them into a single line at index N.
+    //
+    text_buffer
+    merge_lines (line_number f, line_number s) const
+    {
+      MINE_PRECONDITION (f.value + 1 == s.value);
+      MINE_PRECONDITION (contains (f));
+      MINE_PRECONDITION (contains (s));
+
+      const auto& fl (lines_[f.value]);
+      const auto& sl (lines_[s.value]);
+
+      // Simply concatenate the byte vectors.
+      //
+      auto t (fl.data + sl.data);
+      line nl (std::move (t));
+
+      // Set the first line to the merged result, then remove the second line.
+      //
+      auto r (lines_.set (f.value, std::move (nl)));
+      r = r.erase (s.value);
+
+      return text_buffer (std::move (r));
+    }
   };
 
-  // Factories.
+  // Factories
   //
 
   inline text_buffer
@@ -311,12 +469,8 @@ namespace mine
     return text_buffer ();
   }
 
-  // Populate a buffer from a raw string.
-  //
-  // We split on '\n'. Note that we currently assume Unix line endings.
-  // CRLF inputs might result in stray '\r' characters at the end of lines,
-  // which we don't strictly forbid (they are just characters) but might
-  // look ugly in the editor rendering.
+  // Parse a standard C++ string (or memory mapped file view) into our
+  // internal line structure.
   //
   inline text_buffer
   make_buffer_from_string (std::string_view s)
@@ -326,31 +480,55 @@ namespace mine
     std::size_t b (0);
     std::size_t e (s.find ('\n'));
 
+    // Scan through the string finding newlines.
+    //
+    // Note that we don't strictly handle CRLF here, we assume LF. If we wanted
+    // full cross-platform support we'd need a smarter split, but for now we
+    // assume the input has been normalized or we accept the CR as a character.
+    //
     while (e != std::string_view::npos)
     {
-      // Construct the flex_vector directly from iterators to avoid
-      // manual push_back loop or intermediate std::string allocation.
-      //
       auto sub (s.substr (b, e - b));
-      text_buffer::line_type l (sub.begin (), sub.end ());
-
+      text_buffer::line l (sub);
       ls = ls.push_back (std::move (l));
+
       b = e + 1;
       e = s.find ('\n', b);
     }
 
-    // Handle the tail (the text after the last newline, or the whole
-    // string if no newline was found).
+    // Handle the final segment.
     //
-    // Example: "A\n" -> Loop handles "A", b points to EOF.
-    //          Tail is empty string "".
-    //          Result: ["A", ""] (Correct, 2 lines).
+    // Even if the string ends with \n, there is technically an empty line
+    // after it in many editors' logic, or we just take the last chunk.
     //
     auto sub (s.substr (b));
-    text_buffer::line_type l (sub.begin (), sub.end ());
-
+    text_buffer::line l (sub);
     ls = ls.push_back (std::move (l));
 
     return text_buffer (std::move (ls));
+  }
+
+  // Serialize the buffer back to a single string.
+  //
+  inline std::string
+  buffer_to_string (const text_buffer& b)
+  {
+    std::string r;
+
+    // Iterate over all lines and append them to the result, injecting the
+    // newlines back in that we stripped during parsing.
+    //
+    for (std::size_t i (0); i < b.line_count (); ++i)
+    {
+      const auto& l (b.line_at (line_number (i)));
+      auto v (l.view ());
+
+      r.append (v.begin (), v.end ());
+
+      if (i + 1 < b.line_count ())
+        r.push_back ('\n');
+    }
+
+    return r;
   }
 }

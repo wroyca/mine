@@ -1,21 +1,27 @@
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include <mine/mine-command-base.hxx>
+#include <mine/mine-unicode-assert.hxx>
+#include <mine/mine-unicode-grapheme.hxx>
 
 namespace mine
 {
-  // Normal typing.
+  // Insert a span of text at the current cursor position.
   //
-  // We insert the character and rely on the cursor's move logic to handle
-  // advancement. If we implement wrapping or tab expansion later, the command
-  // doesn't need to know about it; it just says "step right".
+  // Note that this command expects a "flat" string of text (no control
+  // characters or newlines). We assume that the input layer has already
+  // stripped or processed those, routing <Enter> to insert_newline_command,
+  // for example.
   //
-  class insert_char_command: public command
+  class insert_text_command: public command
   {
   public:
     explicit
-    insert_char_command (char c)
-        : c_ (c)
+    insert_text_command (std::string text)
+      : text_ (std::move (text))
     {
     }
 
@@ -25,13 +31,23 @@ namespace mine
       const auto& b (s.buffer ());
       const auto& c (s.get_cursor ());
 
-      // Mutate the buffer.
+      // Sanity check: the input layer gave us valid UTF-8.
       //
-      auto nb (b.insert_char (c.position (), c_));
+      assert_valid_utf8 (text_);
 
-      // Calculate new cursor position based on the new content.
+      // Insert the grapheme sequence into the buffer at the current position.
       //
-      auto nc (c.move_right (nb));
+      auto nb (b.insert_graphemes (c.position (), text_));
+
+      // Calculate the new cursor position.
+      //
+      // Since we assume the text contains no newlines (it's a horizontal
+      // insertion), we can simply advance the column index by the number of
+      // graphemes inserted.
+      //
+      std::size_t n (count_graphemes (text_));
+      cursor nc (cursor_position (c.line (),
+                                  column_number (c.column ().value + n)));
 
       return s.update (std::move (nb), nc);
     }
@@ -39,7 +55,7 @@ namespace mine
     virtual std::string_view
     name () const noexcept override
     {
-      return "insert_char";
+      return "insert_text";
     }
 
     virtual bool
@@ -49,13 +65,13 @@ namespace mine
     }
 
   private:
-    char c_;
+    std::string text_;
   };
 
-  // Hard return (Enter).
+  // Insert a logical newline (break the current line).
   //
-  // Splits the current line and forces the cursor to the beginning of the
-  // next line (implicit carriage return).
+  // This operation splits the current line at the cursor position and moves
+  // the cursor to the beginning (column 0) of the newly created line.
   //
   class insert_newline_command: public command
   {
@@ -66,12 +82,11 @@ namespace mine
       const auto& b (s.buffer ());
       const auto& c (s.get_cursor ());
 
+      // Split the line in the buffer.
+      //
       auto nb (b.insert_newline (c.position ()));
 
-      // Reset to column 0 on the new line.
-      //
-      // Note: We access .value directly here assuming strong types for
-      // line/col numbers.
+      // Move the cursor to the start of the next line.
       //
       cursor nc (cursor_position (line_number (c.line ().value + 1),
                                   column_number (0)));

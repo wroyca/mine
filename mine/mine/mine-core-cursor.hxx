@@ -8,20 +8,16 @@
 
 namespace mine
 {
-  // A point in the 2D text grid.
+  // A cursor in grapheme cluster space.
   //
-  // We keep this purely geometric: it knows "where" it is, but it doesn't
-  // know "what" is there until we ask it to move relative to a buffer.
+  // This class represents the "point" in the editor. Note that all coordinates
+  // here are in terms of *grapheme clusters*, not bytes or code points.
   //
-  // Note on "Phantom Columns":
-  // One tricky aspect of text editing is vertical movement. If you are on
-  // column 100 and move down to a line with 5 characters, you snap to 5.
-  // If you move down again to a long line, ideally you should snap *back*
-  // to 100.
+  // If the user presses "Right" while standing on a flag emoji, we increment
+  // the column by 1, which might correspond to jumping 10+ bytes in the buffer.
   //
-  // This class does *not* track that "phantom" 100. It implements the
-  // strict physical clamping. The state management layer (editor_state)
-  // is responsible for tracking the desired column if we want that behavior.
+  // In other words, we relies on the buffer to define what "column N" actually
+  // means in memory.
   //
   class cursor
   {
@@ -34,7 +30,7 @@ namespace mine
     {
     }
 
-    // Accessors.
+    // Accessors
     //
 
     cursor_position
@@ -55,12 +51,7 @@ namespace mine
       return p_.column;
     }
 
-    // Navigation.
-    //
-    // These functions return a *new* cursor. The philosophy here is permissive:
-    // if a move is invalid (e.g., move_up() at the top), we return *this*
-    // unchanged rather than throwing or returning null. This simplifies
-    // the command layer.
+    // Navigation
     //
 
     cursor
@@ -69,74 +60,78 @@ namespace mine
       return cursor (p);
     }
 
-    // Step backward.
+    // Move backwards (Left Arrow).
     //
-    // If we are at the start of a line (column 0), we wrap to the end of
-    // the previous line. If we are at the very start of the buffer (0,0),
-    // we stay put.
+    // Standard wrapping logic: if we hit the left wall (column 0), we try to
+    // wrap up to the end of the previous line.
     //
     cursor
     move_left (const text_buffer& b) const noexcept
     {
-      // Simple case: middle of a line.
+      // If we have room on the current line, just step back.
       //
       if (p_.column.value > 0)
       {
         return cursor (cursor_position (p_.line,
                                         column_number (p_.column.value - 1)));
       }
-      // Wrap to previous line?
+
+      // We are at column 0. Try to wrap to the previous line.
       //
-      else if (p_.line.value > 0)
+      if (p_.line.value > 0)
       {
         line_number l (p_.line.value - 1);
+
+        // Snap to the end of that line.
+        //
         std::size_t n (b.line_length (l));
 
         return cursor (cursor_position (l, column_number (n)));
       }
 
-      // Hard stop at (0,0).
+      // We are at (0,0). Nowhere to go.
       //
       return *this;
     }
 
-    // Step forward.
+    // Move forwards (Right Arrow).
     //
-    // Similarly, we wrap to the start of the next line if we hit the end.
-    // Note that "end of line" here includes the position *after* the last
-    // character (where the newline effectively lives).
+    // Wrapping logic: if we hit the end of the line (past the last grapheme),
+    // we wrap to the start of the next line.
     //
     cursor
     move_right (const text_buffer& b) const noexcept
     {
       std::size_t n (b.line_length (p_.line));
 
-      // Can we step forward on this line?
-      //
-      // Note: valid positions are 0..n inclusive.
+      // Check if we are physically within the line boundaries.
       //
       if (p_.column.value < n)
       {
         return cursor (cursor_position (p_.line,
                                         column_number (p_.column.value + 1)));
       }
-      // Wrap to next line?
+
+      // We are at the end. Try to wrap to the start of the next line.
       //
-      else if (p_.line.value + 1 < b.line_count ())
+      if (p_.line.value + 1 < b.line_count ())
       {
         return cursor (cursor_position (line_number (p_.line.value + 1),
                                         column_number (0)));
       }
 
-      // EOF.
+      // End of buffer.
       //
       return *this;
     }
 
-    // Vertical movement.
+    // Move Up.
     //
-    // As mentioned above, this implements "clamping". If the target line
-    // is shorter than our current column, we snap to the end of that line.
+    // Vertical movement is slightly tricky because lines have different
+    // lengths.
+    //
+    // The current behavior is a "hard clamp". That is, if we move from a long
+    // line to a short line, we clamp the cursor to the end of the short line.
     //
     cursor
     move_up (const text_buffer& b) const noexcept
@@ -146,7 +141,7 @@ namespace mine
         line_number l (p_.line.value - 1);
         std::size_t n (b.line_length (l));
 
-        // Clamp 'c' to the length of the new line.
+        // Clamp column to the new line's length.
         //
         column_number c (std::min (p_.column.value, n));
 
@@ -156,6 +151,10 @@ namespace mine
       return *this;
     }
 
+    // Move Down.
+    //
+    // Same clamping logic as move_up.
+    //
     cursor
     move_down (const text_buffer& b) const noexcept
     {
@@ -164,8 +163,6 @@ namespace mine
         line_number l (p_.line.value + 1);
         std::size_t n (b.line_length (l));
 
-        // Clamp.
-        //
         column_number c (std::min (p_.column.value, n));
 
         return cursor (cursor_position (l, c));
@@ -174,7 +171,7 @@ namespace mine
       return *this;
     }
 
-    // Semantic Jumps (Home/End).
+    // Semantic Jumps
     //
 
     cursor
@@ -208,11 +205,11 @@ namespace mine
       return cursor (cursor_position (l, column_number (n)));
     }
 
-    // Sanitize the cursor.
+    // Validation.
     //
-    // When the buffer changes "under our feet" (e.g., Undo, or a background
-    // reload), then it might be pointing to line 500 whereas buffer now only
-    // has 10 lines. This pulls it back into valid territory.
+    // This is useful after an external buffer mutation (like a undo/redo or
+    // a background save) where the cursor might end up pointing to a line
+    // that no longer exists or a column that is now out of bounds.
     //
     cursor
     clamp_to_buffer (const text_buffer& b) const noexcept
@@ -220,11 +217,11 @@ namespace mine
       if (b.line_count () == 0)
         return cursor (cursor_position (line_number (0), column_number (0)));
 
-      // Clamp line index.
+      // 1. Clamp line index.
       //
       line_number l (std::min (p_.line.value, b.line_count () - 1));
 
-      // Clamp column index (based on the *clamped* line's length).
+      // 2. Clamp column index.
       //
       std::size_t n (b.line_length (l));
       column_number c (std::min (p_.column.value, n));

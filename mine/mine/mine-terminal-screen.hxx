@@ -1,24 +1,26 @@
 #pragma once
 
-#include <algorithm>
-#include <compare>
 #include <vector>
+#include <string>
+#include <compare>
+#include <algorithm>
 
 #include <mine/mine-types.hxx>
 #include <mine/mine-assert.hxx>
 
 namespace mine
 {
-  // Visual properties of a single character cell.
+  // Visual attributes for a single cell.
   //
-  // We stick to the standard ANSI attributes here. While modern terminals
-  // support RGB (TrueColor), we start with the basic 8-bit palette (256 colors)
-  // for broad compatibility and smaller memory footprint.
+  // We keep this structure relatively compact because we are going to store
+  // thousands of these. Note that while modern terminals support 24-bit
+  // TrueColor, we currently stick to the standard 8-bit palette (256 colors)
+  // to minimize memory bandwidth usage during the diff pass.
   //
   struct cell_attributes
   {
-    std::uint8_t fg_color = 7;  // Default: White (ANSI 37)
-    std::uint8_t bg_color = 0;  // Default: Black (ANSI 40)
+    std::uint8_t fg = 7; // ANSI 37 (White)
+    std::uint8_t bg = 0; // ANSI 40 (Black)
 
     bool bold      = false;
     bool italic    = false;
@@ -29,68 +31,116 @@ namespace mine
 
   // The atomic unit of the screen grid.
   //
+  // A "cell" here isn't just a `char`. It holds a complete "Grapheme Cluster"
+  // because in the modern world, a single user-perceived character can be a
+  // sequence of multiple bytes (UTF-8) or even multiple codepoints (like an
+  // Emoji with a skin-tone modifier).
+  //
+  // Wide characters (CJK, Emoji) present a layout challenge. They visually
+  // occupy two columns but strictly speaking belong to a single logical
+  // position. We handle this by storing the data in the left cell and marking
+  // the right cell as a "continuation". The renderer knows to skip these
+  // continuations.
+  //
   struct terminal_cell
   {
-    char ch = ' ';
+    std::string     text {" "};
     cell_attributes attrs;
+    bool            wide_continuation {false};
 
     bool operator== (const terminal_cell&) const = default;
   };
 
-  // A memory representation of the terminal state.
+  // The in-memory frame buffer.
   //
-  // We use this for double-buffering. The renderer keeps the "current"
-  // state (what's on screen) and builds the "next" state.
+  // We use this for Double Buffering. The renderer maintains two instances:
+  // `current` (what the user sees right now) and `next` (what we want to show
+  // them in the next frame).
   //
-  // We flatten the 2D grid into a 1D vector to keep the prefetcher happy
-  // during linear scans (which happen constantly during diffing).
+  // Implementation-wise, we flatten the 2D grid into a single 1D vector. While
+  // `vector<vector<cell>>` might seem more natural for a grid, it kills cache
+  // locality.
   //
   class terminal_screen
   {
   public:
     terminal_screen () = default;
 
-    explicit terminal_screen (screen_size s)
-        : size_ (s),
-          cells_ (s.rows * s.cols, terminal_cell {})
+    explicit
+    terminal_screen (screen_size s)
+      : size_ (s),
+        cells_ (s.rows * s.cols, terminal_cell {})
     {
     }
 
     screen_size
-    size () const noexcept { return size_; }
-
-    // Accessors.
-    //
-    terminal_cell&
-    at (screen_position pos)
+    size () const noexcept
     {
-      MINE_PRECONDITION (size_.contains (pos));
-      return cells_[pos.row * size_.cols + pos.col];
+      return size_;
+    }
+
+    // Access
+    //
+
+    terminal_cell&
+    at (screen_position p)
+    {
+      MINE_PRECONDITION (size_.contains (p));
+      return cells_[p.row * size_.cols + p.col];
     }
 
     const terminal_cell&
-    at (screen_position pos) const
+    at (screen_position p) const
     {
-      MINE_PRECONDITION (size_.contains (pos));
-      return cells_[pos.row * size_.cols + pos.col];
+      MINE_PRECONDITION (size_.contains (p));
+      return cells_[p.row * size_.cols + p.col];
     }
 
-    // Modifiers.
+    // Modification
     //
-    void
-    set_cell (screen_position pos, terminal_cell c)
-    {
-      at (pos) = c;
-    }
 
     void
-    set_char (screen_position pos, char ch, cell_attributes attrs = {})
+    set_cell (screen_position p, terminal_cell c)
     {
-      at (pos) = terminal_cell {ch, attrs};
+      at (p) = c;
     }
 
-    // Bulk operations.
+    // Convenience helper for writing simple ASCII.
     //
+    void
+    set_char (screen_position p, char c, cell_attributes a = {})
+    {
+      at (p) = terminal_cell {std::string (1, c), a, false};
+    }
+
+    // Write a full grapheme cluster.
+    //
+    // If the grapheme is "wide" (like a Kanji or a Smiley), it will clobber two
+    // cells. We write the actual content into `p` and then write a dummy marker
+    // into `p + 1`.
+    //
+    // Note that we check bounds for the continuation cell: if a wide char is
+    // written to the very last column, we just clip the continuation (the
+    // terminal will likely wrap or clip anyway).
+    //
+    void
+    set_grapheme (screen_position p,
+                  std::string_view s,
+                  cell_attributes a = {},
+                  bool wide = false)
+    {
+      at (p) = terminal_cell {std::string (s), a, false};
+
+      if (wide && p.col + 1 < size_.cols)
+      {
+        screen_position next (p.row, p.col + 1);
+        at (next) = terminal_cell {"", a, true};
+      }
+    }
+
+    // Bulk Ops
+    //
+
     void
     clear ()
     {
@@ -102,29 +152,36 @@ namespace mine
     {
       MINE_PRECONDITION (row < size_.rows);
 
-      auto start (cells_.begin () + (row * size_.cols));
-      std::fill (start, start + size_.cols, terminal_cell {});
+      // We can just iterate the segment of the flat vector corresponding to
+      // this row.
+      //
+      auto b (cells_.begin () + (row * size_.cols));
+      std::fill (b, b + size_.cols, terminal_cell {});
     }
 
-    // Create a new screen with different dimensions.
+    // Resize the canvas, preserving content.
     //
-    // We attempt to preserve the content of the top-left corner (0,0) up
-    // to the bounds of the new size (clipping if smaller, padding if larger).
+    // When the terminal window is resized, we want to try and keep the
+    // current content "anchored" at top-left, rather than clearing everything.
+    //
+    // We compute the intersection of the old rect and the new rect. Content
+    // inside the intersection is copied over; content outside is dropped; new
+    // space is zero-initialized.
     //
     terminal_screen
-    resize (screen_size new_size) const
+    resize (screen_size new_s) const
     {
-      terminal_screen r (new_size);
+      terminal_screen r (new_s);
 
-      std::uint16_t rows (std::min (size_.rows, new_size.rows));
-      std::uint16_t cols (std::min (size_.cols, new_size.cols));
+      std::uint16_t h (std::min (size_.rows, new_s.rows));
+      std::uint16_t w (std::min (size_.cols, new_s.cols));
 
-      for (std::uint16_t y (0); y < rows; ++y)
+      for (std::uint16_t y (0); y < h; ++y)
       {
-        for (std::uint16_t x (0); x < cols; ++x)
+        for (std::uint16_t x (0); x < w; ++x)
         {
-          screen_position pos (y, x);
-          r.set_cell (pos, at (pos));
+          screen_position p (y, x);
+          r.set_cell (p, at (p));
         }
       }
 
@@ -138,30 +195,41 @@ namespace mine
     std::vector<terminal_cell> cells_;
   };
 
-  // The delta between two frames.
+  // Diffing
   //
-  // Used to minimize I/O bandwidth. Instead of redrawing the whole screen
-  // (which is slow over SSH), we only emit ANSI codes for cells that changed.
+
+  // A list of point-mutations required to transition one frame to another.
   //
   struct screen_diff
   {
     struct change
     {
       screen_position pos;
-      terminal_cell cell;
+      terminal_cell   cell;
     };
 
     std::vector<change> changes;
 
     bool
-    empty () const noexcept { return changes.empty (); }
+    empty () const noexcept
+    {
+      return changes.empty ();
+    }
   };
 
-  // Calculate the difference.
+  // Compute the minimal set of updates.
   //
-  // Note: This requires both screens to have the same dimensions. If the
-  // terminal resized, the diff is undefined (the caller should force a
-  // full redraw).
+  // This is the core optimization of the renderer. Writing to a TTY is
+  // surprisingly expensive (syscall overhead, kernel buffering, potentially
+  // network latency if over SSH).
+  //
+  // By comparing the previous frame (`old_s`) to the next frame (`new_s`) in
+  // memory, we can emit ANSI codes *only* for the cells that actually
+  // changed.
+  //
+  // Note that this requires both screens to have the same dimensions. If the
+  // user resized the window, the whole coordinate system shifted, so a diff
+  // is meaningless (and we should force a full redraw instead).
   //
   inline screen_diff
   compute_screen_diff (const terminal_screen& old_s,
@@ -172,16 +240,22 @@ namespace mine
     screen_diff d;
     screen_size sz (new_s.size ());
 
+    // Linear scan.
+    //
+    // Because we flattened the vector in `terminal_screen`, this loop walks
+    // contiguous memory. (CPU prefetcher will love this ;) ).
+    //
     for (std::uint16_t r (0); r < sz.rows; ++r)
     {
       for (std::uint16_t c (0); c < sz.cols; ++c)
       {
-        screen_position pos (r, c);
+        screen_position p (r, c);
 
-        // Optimization: checking inequality is cheap, allocations are not.
+        // We rely on `terminal_cell::operator==` here. If the content, color,
+        // or attributes are different, we record a change.
         //
-        if (old_s.at (pos) != new_s.at (pos))
-          d.changes.push_back ({pos, new_s.at (pos)});
+        if (old_s.at (p) != new_s.at (p))
+          d.changes.push_back ({p, new_s.at (p)});
       }
     }
 

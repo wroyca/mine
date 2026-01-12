@@ -11,22 +11,33 @@ namespace mine
   // Map the raw input event (which is a variant of specific event structures)
   // to an abstract command.
   //
-  // Note that we return nullptr for events that don't map to a command (like
-  // resizing or unknown keys). The caller is expected to handle or ignore
-  // nulls.
+  // Note that strictly speaking, we could return a "noop" command for
+  // unhandled events, but returning nullptr allows the caller to easily
+  // differentiate between "nothing happened" and "command executed but did
+  // nothing".
   //
   command_ptr
   make_command (const input_event& e)
   {
-    return visit ([] (auto&& x) -> command_ptr
+    return visit ([] (const auto& x) -> command_ptr
     {
       using type = decay_t<decltype (x)>;
 
-      // Regular typing.
+      // Text input.
       //
-      if constexpr (is_same_v<type, key_press_event>)
+      if constexpr (is_same_v<type, text_input_event>)
       {
-        return make_unique<insert_char_command> (x.ch);
+        // We treat any text input with the Ctrl modifier as a potential
+        // command shortcut (e.g., Ctrl-s for save, Ctrl-q for quit) rather
+        // than literal text insertion.
+        //
+        // So let these fall through to the global key binder/shortcut handler
+        // which sits above this translator.
+        //
+        if (has_modifier (x.modifiers, key_modifier::ctrl))
+          return nullptr;
+
+        return make_unique<insert_text_command> (x.text);
       }
       // Functional keys.
       //
@@ -36,31 +47,26 @@ namespace mine
         {
           // Navigation.
           //
-          case special_key::up:
-            return make_unique<move_cursor_command> (move_direction::up);
-          case special_key::down:
-            return make_unique<move_cursor_command> (move_direction::down);
-          case special_key::left:
-            return make_unique<move_cursor_command> (move_direction::left);
-          case special_key::right:
-            return make_unique<move_cursor_command> (move_direction::right);
+          case special_key::up:    return make_unique<move_cursor_command> (move_direction::up);
+          case special_key::down:  return make_unique<move_cursor_command> (move_direction::down);
+          case special_key::left:  return make_unique<move_cursor_command> (move_direction::left);
+          case special_key::right: return make_unique<move_cursor_command> (move_direction::right);
 
-          case special_key::home:
-            return make_unique<move_cursor_command> (move_direction::line_start);
-          case special_key::end:
-            return make_unique<move_cursor_command> (move_direction::line_end);
+          // For Home/End we currently map to line start/end.
+          //
+          // @@: At some point we should differentiate between visual line start
+          // (ignoring whitespace) and absolute line start.
+          //
+          case special_key::home: return make_unique<move_cursor_command> (move_direction::line_start);
+          case special_key::end:  return make_unique<move_cursor_command> (move_direction::line_end);
 
           // Editing.
           //
-          case special_key::backspace:
-            return make_unique<delete_backward_command> ();
-          case special_key::delete_key:
-            return make_unique<delete_forward_command> ();
-          case special_key::enter:
-            return make_unique<insert_newline_command> ();
+          case special_key::backspace:  return make_unique<delete_backward_command> ();
+          case special_key::delete_key: return make_unique<delete_forward_command> ();
+          case special_key::enter:      return make_unique<insert_newline_command> ();
 
-          default:
-            return nullptr;
+          default: return nullptr;
         }
       }
       // Mouse events.
@@ -69,12 +75,15 @@ namespace mine
       {
         // Handle scroll wheel.
         //
-        // In the XTerm protocol (even with SGR 1006 enabled), the scroll wheel
-        // is mapped to "Button 4" and "Button 5".
+        // In the XTerm protocol (even with SGR 1006 enabled), the scroll
+        // wheel is typically mapped to "Button 4" and "Button 5".
         //
-        // Bit 6 (value 64) is set for these buttons.
+        // Historically, these have bit 6 set (value 64).
         // 64 + 0 = Scroll Up
         // 64 + 1 = Scroll Down
+        //
+        // @@: We should parameterize the scroll amount later, but for now, a
+        // single tick moves a single unit.
         //
         if (x.button == 64)
           return make_unique<move_cursor_command> (move_direction::scroll_up);
@@ -83,7 +92,7 @@ namespace mine
 
         return nullptr;
       }
-      // Ignore everything else (resize events, etc).
+      // Ignore everything else (resize events, unknown variants, etc).
       //
       else
       {

@@ -2,7 +2,9 @@ libs =
 import libs += libboost-asio%lib{boost_asio}
 import libs += libcpptrace%lib{cpptrace}
 import libs += libimmer%lib{immer}
+import libs += libicui18n%lib{icui18n}
 
 exe{mine}: {hxx ixx txx cxx}{**} $libs
 
 cxx.poptions =+ "-I$out_root" "-I$src_root"
+cxx.coptions =+ "-Wno-array-compare"

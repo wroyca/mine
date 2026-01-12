@@ -1,8 +1,8 @@
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
 #include <thread>
-#include <chrono>
 
 #include <boost/asio/signal_set.hpp>
 
@@ -19,111 +19,168 @@ using namespace std;
 
 namespace mine
 {
-  // Signal handling.
+  // Signal Handling
   //
-  // We need to catch SIGINT (Ctrl+C) and SIGTERM to exit gracefully, restoring
-  // the terminal state. For SIGABRT, we want a stack trace before dying.
+  // This is the messy interface between the clean C++ world and the raw OS
+  // signals. We need to catch:
+  //
+  // 1. SIGINT/SIGTERM: To exit gracefully (restore terminal mode).
+  // 2. SIGABRT: To print a stack trace when we crash (via assert or abort).
+  // 3. SIGWINCH: Handled separately via Boost.Asio (see app class).
   //
   namespace
   {
-    volatile sig_atomic_t g_signal_received (0);
+    volatile sig_atomic_t g_sig (0);
+
+    // Global pointer to the raw mode RAII guard.
+    //
+    // This is a necessary evil. If we crash or get killed by a signal, the
+    // RAII destructor for `terminal_raw_mode` won't run naturally. We need
+    // this hook to manually restore the terminal state (uncooked -> cooked)
+    // inside the signal handler; otherwise, the user's shell is left in a
+    // broken state (no echo, no cursor).
+    //
+    terminal_raw_mode* g_raw (nullptr);
 
     extern "C" void
     signal_handler (int s)
     {
-      g_signal_received = s;
+      g_sig = s;
     }
 
     extern "C" void
     abort_handler (int s)
     {
-      // We are crashing. Try to print something useful.
+      // The "Last Gasp".
       //
-      // Note: cpptrace might allocate memory or do other non-async-signal-safe
-      // things. Technically this is undefined behavior inside a signal handler,
-      // but since we are aborting anyway, it's worth the risk for debugging
-      // info.
+      // If we are here, the ship is sinking. We try to restore the terminal
+      // first so the error message is actually readable.
       //
-      cerr << "\n=== CAUGHT SIGABRT (" << s << ") ===\n"
-                << "Stack trace at abort:\n";
+      if (g_raw != nullptr)
+      {
+        try
+        {
+          // Explicit destructor call. This restores the termios settings.
+          //
+          // Is this async-signal-safe? Technically no. `tcsetattr` is, but
+          // the C++ destructor might do other things. However, we are about
+          // to abort anyway, so the risk of deadlock is irrelevant compared
+          // to the benefit of a clean terminal.
+          //
+          g_raw->~terminal_raw_mode ();
+          g_raw = nullptr;
+        }
+        catch (...)
+        {
+          // Swallow it. We have bigger problems.
+          //
+        }
+      }
+
+      // Print the trace.
+      //
+      // `cpptrace` is definitely not async-signal-safe (it allocates memory,
+      // reads DWARF info, etc.). But again, better a stack trace that works
+      // 99% of the time than a silent `Aborted`.
+      //
+      cerr << "\nCAUGHT SIGABRT (" << s << ")\n"
+           << "Stack trace at abort:\n";
 
       cpptrace::generate_trace ().print ();
-
       cerr << endl;
 
-      // Reset to default handler and re-raise to actually terminate and dump
-      // core.
+      // Unhook ourselves and re-raise to let the OS generate the core dump
+      // and proper exit code.
       //
       signal (s, SIG_DFL);
       raise (s);
     }
   }
 
-  // The application context.
+  // The Application Context
   //
   class terminal_editor_app
   {
   public:
     terminal_editor_app ()
     {
+      // Hook the global for emergency cleanup.
+      //
+      g_raw = &raw_;
       init ();
     }
 
-    explicit terminal_editor_app (const string& fn)
-        : initial_file_ (fn)
+    explicit
+    terminal_editor_app (const string& f)
+        : file_ (f)
     {
+      g_raw = &raw_;
       init ();
+    }
+
+    ~terminal_editor_app ()
+    {
+      g_raw = nullptr;
     }
 
     void
     run ()
     {
-      // Install handlers.
+      // Install C-style handlers for the "hard" signals.
       //
       signal (SIGINT, signal_handler);
       signal (SIGTERM, signal_handler);
       signal (SIGABRT, abort_handler);
 
-      // Start the reactor.
+      // Kick off the reactor.
       //
-      input_handler_->start ();
-      renderer_->force_redraw (core_.current ());
+      input_->start ();
+      ren_->force_redraw (core_.current ());
 
       // The Main Loop.
       //
-      // We drive the boost::asio::io_context (wrapped in async_loop).
+      // We rely on `boost::asio::io_context` to drive our async logic.
       //
-      while (!g_signal_received && !should_quit_)
+      while (!g_sig && !quit_)
       {
-        // If the context ran out of work (empty queue), it stops. We must
-        // restart it to keep waiting for input.
+        // Strategy: Block, then Drain.
         //
-        // Block until at least one handler runs.
-        //
-        // If we used poll() here, we'd burn 100% CPU. run_one() blocks
-        // efficiently.
+        // 1. `run_one()` blocks until *at least one* event arrives (input,
+        //     timer, signal). This keeps CPU usage near 0% when idle.
         //
         if (loop_.context ().run_one () > 0)
         {
-          // If we processed an event, drain any other ready events immediately
-          // to batch updates (e.g., if the user pasted a block of text).
+          // 2. `poll()` executes any *other* events that are already ready.
+          //
+          // Why? If the user pasted 1KB of text, `run_one` processes the
+          // first byte. We don't want to render the screen after every single
+          // byte. By polling, we drain the input queue, batching the logic
+          // updates, and only render once the queue is empty.
           //
           loop_.context ().poll ();
         }
+        else
+        {
+          // If run_one() returns 0, the context is "stopped" (out of work). We
+          // must restart it to keep waiting.
+          //
+          if (loop_.context ().stopped ())
+            loop_.context ().restart ();
+        }
       }
 
-      // If we are here, we are shutting down.
+      // Shutdown sequence.
       //
-      input_handler_->stop ();
-      if (resize_signal_)
-        resize_signal_->cancel ();
+      input_->stop ();
+      if (winch_)
+        winch_->cancel ();
     }
 
   private:
     void
     init ()
     {
-      // Setup Terminal.
+      // Detect Environment.
       //
       auto sz (get_terminal_size ());
       if (!sz)
@@ -132,132 +189,139 @@ namespace mine
         exit (1);
       }
 
-      // Bootstrap core state with the detected dimensions (*sz) to make the
-      // initial render layout matches the physical screen.
+      // Bootstrap Core.
       //
-      // Failed that, we might get a frame of 80x24 content before the resize
-      // event kicks in.
+      // We initialize the view immediately with the correct size. If we
+      // defaulted to 80x24 and then resized, the user might see a single frame
+      // of wrong layout flickering at startup.
       //
       auto s (core_.current ());
       auto v (s.view ().resize (*sz));
 
-      core_ = editor_core (loop_, s.with_view (std::move (v)));
+      core_ = editor_core (loop_, s.with_view (move (v)));
+      ren_ = make_unique<terminal_renderer> (*sz);
 
-      renderer_ = make_unique<terminal_renderer> (*sz);
-
-      // Connect the core state changes to the renderer.
+      // Wire up Logic -> UI.
       //
       core_.on_change (
-        [this] (const editor_state& st, state_change_type type)
+        [this] (const editor_state& st, state_change_type t)
         {
-          if (type == state_change_type::cursor)
-            renderer_->render_cursor_only (st);
+          if (t == state_change_type::cursor)
+            ren_->render_cursor_only (st);
           else
-            renderer_->render (st);
+            ren_->render (st);
         });
 
       core_.on_message (
-        [this] (const string& msg)
+        [this] (const string& m)
         {
-          // TODO: Actually render this in the status bar.
+          // TODO: This should eventually feed into a status bar component.
           //
-          last_file_message_ = msg;
+          last_msg_ = m;
         });
 
-      // Connect input to the handler.
+      // Wire up Input -> Logic.
       //
-      input_handler_ = make_unique<async_input_handler> (
+      input_ = make_unique<async_input_handler> (
         loop_,
-        [this] (const input_event& e) { handle_input_event (e); });
+        [this] (const input_event& e) { handle_input (e); });
 
-      // Setup resize signal handler.
+      // Setup Resize Handler.
       //
-      resize_signal_ = make_unique<boost::asio::signal_set> (loop_.context (), SIGWINCH);
+      // We use `signal_set` for SIGWINCH because it integrates cleanly with
+      // the ASIO reactor, unlike the raw C handlers.
+      //
+      winch_ = make_unique<boost::asio::signal_set> (loop_.context (),
+                                                     SIGWINCH);
       handle_resize ();
 
-      // Load File.
+      // Load Initial File.
       //
-      if (!initial_file_.empty ())
-        core_.load (initial_file_);
+      if (!file_.empty ())
+        core_.load (file_);
     }
 
     void
     handle_resize ()
     {
-      resize_signal_->async_wait ([this] (const boost::system::error_code& ec, int)
+      winch_->async_wait ([this] (const boost::system::error_code& ec, int)
       {
         if (!ec)
         {
-          // Re-arm for next signal.
+          // Re-arm immediately.
           //
           handle_resize ();
 
-          // Clear screen immediately to prevent the terminal from displaying
-          // wrapped content at the old size. The terminal may have already
-          // reflowed text when resized, so we need to clear ASAP before
-          // querying the new size.
+          // The Resize Dance.
+          //
+          // When the terminal window resizes, the text reflows chaotically.
+          // We clear the screen immediately to remove artifacts, then query
+          // the new dimensions and tell the engine to rebuild the world.
           //
           cout << "\x1b[2J\x1b[H" << flush;
 
-          // Query new terminal size.
-          //
           auto sz (get_terminal_size ());
           if (sz)
           {
-            // Update core view and renderer.
-            //
             core_.resize (*sz);
-            renderer_->resize (*sz);
-            renderer_->force_redraw (core_.current ());
+            ren_->resize (*sz);
+            ren_->force_redraw (core_.current ());
           }
         }
       });
     }
 
     void
-    handle_input_event (const input_event& e)
+    handle_input (const input_event& e)
     {
-      // Intercept app-level commands before passing to the editor core.
+      // App-level shortcuts (Quit, Save).
       //
-      if (const auto* k = get_if<key_press_event> (&e))
+      // These bypass the editor core because they affect the lifecycle of
+      // the application itself or IO, not just buffer state.
+      //
+      if (const auto* k = get_if<text_input_event> (&e))
       {
-        // Ctrl+Q to Quit.
+        // Ctrl+Q -> Quit
         //
-        if (k->ch == 'q' && has_modifier (k->modifiers, key_modifier::ctrl))
+        if (k->text == "q" && has_modifier (k->modifiers, key_modifier::ctrl))
         {
-          should_quit_ = true;
+          quit_ = true;
           return;
         }
 
-        // Ctrl+S to Save.
+        // Ctrl+S -> Save
         //
-        if (k->ch == 's' && has_modifier (k->modifiers, key_modifier::ctrl))
+        if (k->text == "s" && has_modifier (k->modifiers, key_modifier::ctrl))
         {
           core_.save ();
           return;
         }
       }
 
-      // Dispatch to logic.
+      // Delegate everything else to the editor logic.
       //
       core_.handle_input (e);
     }
 
-    async_loop loop_;
+    // Infrastructure.
+    //
+    async_loop  loop_;
     editor_core core_ {loop_};
 
-    // Must come after loop/core but before renderer ideally, though strict
-    // destruction order usually matters more for the loop.
+    // RAII guard for raw mode.
     //
-    terminal_raw_mode raw_mode_;
+    // MUST be declared before UI components so it destructs *last* (restoring
+    // the terminal only after we stop printing).
+    //
+    terminal_raw_mode raw_;
 
-    unique_ptr<terminal_renderer> renderer_;
-    unique_ptr<async_input_handler> input_handler_;
-    unique_ptr<boost::asio::signal_set> resize_signal_;
+    unique_ptr<terminal_renderer>       ren_;
+    unique_ptr<async_input_handler>     input_;
+    unique_ptr<boost::asio::signal_set> winch_;
 
-    string initial_file_;
-    string last_file_message_;
-    bool should_quit_ = false;
+    string file_;
+    string last_msg_;
+    bool   quit_ = false;
   };
 }
 
@@ -281,7 +345,7 @@ main (int argc, char* argv[])
   }
   catch (const exception& e)
   {
-    cerr << "error: " << e.what () << endl;
+    cerr << "Abandon all hope, ye who enter here: " << e.what () << endl;
     return 1;
   }
 }
