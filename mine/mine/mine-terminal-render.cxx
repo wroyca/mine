@@ -39,6 +39,7 @@ namespace mine
     if (next.size () != current_screen_.size ())
     {
       clear_screen ();
+      cout.flush ();
       current_screen_ = terminal_screen (next.size ());
     }
 
