@@ -97,5 +97,11 @@ namespace mine
 
     void
     show_cursor ();
+
+    void
+    begin_sync_update ();
+
+    void
+    end_sync_update ();
   };
 }

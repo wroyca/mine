@@ -13,6 +13,13 @@ namespace mine
   void terminal_renderer::
   render (const editor_state& s)
   {
+    // Begin synchronized update (DEC Private Mode 2026).
+    //
+    // This tells the terminal to buffer all output until we call
+    // end_sync_update.
+    //
+    begin_sync_update ();
+
     // First, let's hide the cursor.
     //
     // If we leave it on while blasting ANSI codes, it might jump around the
@@ -57,12 +64,17 @@ namespace mine
     position_cursor (s);
     last_cursor_pos_ = s.get_cursor ().position ();
 
+    end_sync_update ();
     cout.flush ();
   }
 
   void terminal_renderer::
   render_cursor_only (const editor_state& s)
   {
+    // Begin synchronized update.
+    //
+    begin_sync_update ();
+
     // Optimize for the common cursor movement case.
     //
     // If the user just hit an arrow key, re-rendering and diffing the entire
@@ -104,6 +116,7 @@ namespace mine
     position_cursor (s);
     last_cursor_pos_ = s.get_cursor ().position ();
 
+    end_sync_update ();
     cout.flush ();
   }
 
@@ -439,5 +452,30 @@ namespace mine
   show_cursor ()
   {
     write ("\x1b[?25h");
+  }
+
+  void terminal_renderer::
+  begin_sync_update ()
+  {
+    // DEC Private Mode 2026: Begin Synchronized Update (BSU).
+    //
+    // CSI ? 2026 h
+    //
+    // This tells the terminal to buffer all subsequent output until
+    // end_sync_update is called.
+    //
+    write ("\x1b[?2026h");
+  }
+
+  void terminal_renderer::
+  end_sync_update ()
+  {
+    // DEC Private Mode 2026: End Synchronized Update (ESU).
+    //
+    // CSI ? 2026 l
+    //
+    // This flushes the buffered output to the screen atomically.
+    //
+    write ("\x1b[?2026l");
   }
 }
