@@ -132,6 +132,11 @@ namespace mine
       signal (SIGTERM, signal_handler);
       signal (SIGABRT, abort_handler);
 
+      // Clear the screen to remove any terminal artifacts before we start
+      // rendering. This is the same escape sequence we use on resize.
+      //
+      cout << "\x1b[2J\x1b[H" << flush;
+
       // Kick off the reactor.
       //
       input_->start ();

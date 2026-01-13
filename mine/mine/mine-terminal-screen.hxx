@@ -233,19 +233,30 @@ namespace mine
   //
   inline screen_diff
   compute_screen_diff (const terminal_screen& old_s,
-                       const terminal_screen& new_s)
+                       const terminal_screen& new_s,
+                       std::uint16_t row_start = 0,
+                       std::uint16_t row_count = 0)
   {
     MINE_PRECONDITION (old_s.size () == new_s.size ());
 
     screen_diff d;
     screen_size sz (new_s.size ());
 
+    // If count is 0 (default), go to the end.
+    //
+    if (row_count == 0)
+      row_count = sz.rows - row_start;
+
+    // Sanity check the bounds.
+    //
+    std::uint16_t row_end (std::min<uint16_t> (row_start + row_count, sz.rows));
+
     // Linear scan.
     //
     // Because we flattened the vector in `terminal_screen`, this loop walks
     // contiguous memory. (CPU prefetcher will love this ;) ).
     //
-    for (std::uint16_t r (0); r < sz.rows; ++r)
+    for (std::uint16_t r (row_start); r < row_end; ++r)
     {
       for (std::uint16_t c (0); c < sz.cols; ++c)
       {

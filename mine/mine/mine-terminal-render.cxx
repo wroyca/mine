@@ -63,13 +63,44 @@ namespace mine
   void terminal_renderer::
   render_cursor_only (const editor_state& s)
   {
-    // Optimization: "I know I just moved the cursor."
+    // Optimize for the common cursor movement case.
     //
-    // If the user just hit an arrow key, re-building the whole screen and
-    // diffing it is overkill (even if the diff turns out empty). We just
-    // update the hardware cursor position.
+    // If the user just hit an arrow key, re-rendering and diffing the entire
+    // screen content is wasteful. We know the text hasn't changed, only the
+    // hardware cursor position and the status line (which displays the
+    // coordinates) need updating.
     //
     hide_cursor ();
+
+    // Update the status line.
+    //
+    // We clone the current screen to apply the status line updates. While
+    // copying the buffer might seem heavy, it allows us to reuse the
+    // standard diffing logic for the status row and avoids custom "draw
+    // immediately" logic.
+    //
+    terminal_screen next (current_screen_);
+    draw_status_line (next, s);
+
+    // Diff only the last row.
+    //
+    // We know the content rows (0 to N-2) are identical, so we restrict
+    // the diff scan to the status line to save cycles.
+    //
+    auto sz (current_screen_.size ());
+
+    if (sz.rows > 0)
+    {
+      uint16_t r (sz.rows - 1);
+      screen_diff diff (compute_screen_diff (current_screen_, next, r, 1));
+
+      if (!diff.empty ())
+      {
+        apply_diff (diff);
+        current_screen_ = std::move (next);
+      }
+    }
+
     position_cursor (s);
     last_cursor_pos_ = s.get_cursor ().position ();
 
