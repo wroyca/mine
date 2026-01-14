@@ -102,28 +102,29 @@ namespace mine
     if (!segmentation_)
       return off;
 
-    // We are looking for the nearest boundary strictly greater than `off`.
+    const auto& seg (*segmentation_);
+
+    // Clamp to EOF.
     //
-    const auto* c (segmentation_->find_at_byte (off));
+    if (off >= seg.total_bytes)
+      return seg.total_bytes;
+
+    const auto* c (seg.find_at_byte (off));
 
     if (c == nullptr)
-      return segmentation_->total_bytes;
+      return seg.total_bytes;
 
-    // Case 1: We are inside a cluster (e.g., pointing at the 2nd byte of a
-    // 3-byte character). The next boundary is the end of *this* cluster.
+    // The next boundary is *always* the end of the current cluster.
     //
-    if (off > c->byte_offset)
-      return c->byte_offset + c->byte_length;
-
-    // Case 2: We are at the start of a cluster. The next boundary is the
-    // start of the *next* cluster.
+    // If we are at the start of a cluster (off == c->byte_offset), the next
+    // logical position is the start of the next cluster.
     //
-    if (c->index + 1 < segmentation_->size ())
-      return segmentation_->clusters[c->index + 1].byte_offset;
-
-    // Case 3: We are at the start of the last cluster. Next boundary is EOF.
+    // If we are inside a cluster (off > c->byte_offset), the next valid
+    // position is also the start of the next cluster (recovering alignment).
     //
-    return segmentation_->total_bytes;
+    // Since clusters are contiguous, start_of_next == end_of_current.
+    //
+    return c->byte_offset + c->byte_length;
   }
 
   size_t grapheme_index::
