@@ -1,7 +1,8 @@
 #pragma once
 
-#include <optional>
 #include <functional>
+#include <optional>
+#include <utility>
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/co_spawn.hpp>
@@ -32,8 +33,16 @@ namespace mine
     using executor_type = context_type::executor_type;
     using strand = boost::asio::strand<executor_type>;
 
-    async_loop ()
-      : ctx_ (),
+    // We default the concurrency hint to 1.
+    //
+    // If we left this at default, Asio would assume we might call run() from
+    // multiple threads and would use internal locking (mutexes) for safety.
+    // Since we are running a single-threaded loop, that locking is just wasted
+    // CPU cycles and latency.
+    //
+    explicit
+    async_loop (int concurrency_hint = 1)
+      : ctx_ (concurrency_hint),
         // Lock the context so run() doesn't exit when the queue is empty.
         //
         work_ (boost::asio::make_work_guard (ctx_))
@@ -47,7 +56,8 @@ namespace mine
     async_loop& operator= (const async_loop&) = delete;
     async_loop& operator= (async_loop&&) = delete;
 
-    // Run the loop. This blocks until stop() is called.
+    // Run the loop. This blocks until stop() is called and all work is
+    // finished.
     //
     void
     run ()
@@ -55,16 +65,23 @@ namespace mine
       ctx_.run ();
     }
 
-    // Stop the loop.
+    // Stop the loop gracefully.
     //
-    // We do this by destroying the work guard to allows the context to
-    // drain any remaining handlers and then exit run() naturally.
+    // We do this by destroying the work guard. This informs the context that no
+    // new "external" work is coming. It will process any handlers already in
+    // the queue (draining) and then exit run() naturally.
+    //
+    // Note: We deliberately avoid ctx_.stop() here. That function causes run()
+    // to return immediately, potentially discarding pending handlers (like
+    // half-finished writes or close events), which is rarely what we want.
+    //
+    // IMPORTANT: To actually exit run(), we must also confirm no other async
+    // operations (like the terminal input reader) are keeping the loop alive.
     //
     void
     stop ()
     {
       work_.reset ();
-      ctx_.stop ();
     }
 
     // Accessors.
