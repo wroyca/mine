@@ -1,14 +1,15 @@
 #include <mine/mine-unicode-assert.hxx>
-#include <mine/mine-core-buffer.hxx>
-#include <mine/mine-core-cursor.hxx>
-#include <mine/mine-unicode-grapheme.hxx>
-
-#include <unicode/ustring.h>
-#include <unicode/brkiter.h>
-#include <unicode/utypes.h>
 
 #include <cassert>
 #include <memory>
+
+#include <unicode/ubrk.h>
+#include <unicode/utext.h>
+#include <unicode/ustring.h>
+
+#include <mine/mine-core-buffer.hxx>
+#include <mine/mine-core-cursor.hxx>
+#include <mine/mine-unicode-grapheme.hxx>
 
 using namespace std;
 
@@ -30,10 +31,10 @@ namespace mine
     UErrorCode e (U_ZERO_ERROR);
     int32_t n (0);
 
-    u_strFromUTF8 (nullptr,                // dest
-                   0,                      // destCapacity
-                   &n,                     // pDestLength
-                   s.data (),              // src
+    u_strFromUTF8 (nullptr,                       // dest
+                   0,                             // destCapacity
+                   &n,                            // pDestLength
+                   s.data (),                     // src
                    static_cast<int32_t> (s.size ()),
                    &e);
 
@@ -52,63 +53,59 @@ namespace mine
   assert_grapheme_boundary (string_view s, size_t off)
   {
 #ifndef NDEBUG
-    // Boundaries.
+    // Boundaries are always valid.
     //
     if (off == 0 || off == s.size ())
       return;
 
     assert (off <= s.size () && "Byte offset out of range");
 
+    // First, a cheap sanity check: Are we pointing into the middle of a
+    // UTF-8 byte sequence? If so, we can fail fast without bothering ICU.
+    //
+    assert_codepoint_boundary (s, off);
+
     UErrorCode e (U_ZERO_ERROR);
 
-    // The Impedance Mismatch.
+    // The naive approach would be to convert the string to UTF-16 to use
+    // the standard BreakIterator. That involves a massive allocation and copy.
     //
-    // Our editor is UTF-8 (byte-oriented). ICU is UTF-16 (UChar-oriented). To
-    // check if a byte offset is a boundary, we have to:
+    // UText allows us to wrap the existing UTF-8 buffer in a view that the
+    // BreakIterator understands. This implies that 'off' functions correctly
+    // as a native byte index, which is exactly what we need.
     //
-    // 1. Convert the string to UTF-16.
-    // 2. Map the byte offset to a UChar offset.
-    // 3. Ask the BreakIterator.
-    //
-    // This is hideously slow, which is why this is strictly a debug check.
-    //
-    auto ustr (icu::UnicodeString::fromUTF8 (
-                 icu::StringPiece (s.data (),
-                                   static_cast<int32_t> (s.size ()))));
+    UText* ut (utext_openUTF8 (nullptr,
+                               s.data (),
+                               static_cast<int64_t> (s.size ()),
+                               &e));
 
-    unique_ptr<icu::BreakIterator> bi (
-      icu::BreakIterator::createCharacterInstance (
-        icu::Locale::getDefault (), e));
+    assert (U_SUCCESS (e) && "Failed to open UText for UTF-8");
+
+    // Note: utext_close returns UText*, not void.
+    //
+    auto ut_guard (unique_ptr<UText, UText* (*) (UText*)> (ut, utext_close));
+
+    auto bi (ubrk_open (UBRK_CHARACTER,
+                        nullptr, // default locale
+                        nullptr, // text (set later)
+                        0,       // text length
+                        &e));
 
     assert (U_SUCCESS (e) && "Failed to create ICU break iterator");
 
-    bi->setText (ustr);
+    auto bi_guard (
+      unique_ptr<UBreakIterator, void (*) (UBreakIterator*)> (bi, ubrk_close));
 
-    // Walk the string to translate offsets.
+    // Bind the text view to the iterator.
     //
-    // We have to iterate code points because a single code point might be 3
-    // bytes in UTF-8 but 1 unit in UTF-16, or 4 bytes in UTF-8 and 2 units
-    // (surrogate pair) in UTF-16.
-    //
-    int32_t u16_off (0);
-    size_t u8_pos (0);
-
-    while (u8_pos < off && u16_off < ustr.length ())
-    {
-      UChar32 c;
-      U16_NEXT (ustr.getBuffer (), u16_off, ustr.length (), c);
-      u8_pos += U8_LENGTH (c);
-    }
-
-    // If we didn't land exactly on the offset, we jumped into the middle of
-    // a multi-byte sequence.
-    //
-    assert (u8_pos == off && "Byte offset splits a UTF-8 code point");
+    ubrk_setUText (bi, ut, &e);
+    assert (U_SUCCESS (e));
 
     // Finally, check the grapheme break logic.
     //
-    assert (bi->isBoundary (u16_off) &&
-            "Byte offset splits a grapheme cluster");
+    bool is_bound (ubrk_isBoundary (bi, static_cast<int32_t> (off)));
+    assert (is_bound && "Byte offset splits a grapheme cluster");
+
 #else
     (void)s;
     (void)off;
@@ -144,10 +141,11 @@ namespace mine
   {
 #ifndef NDEBUG
     UErrorCode e (static_cast<UErrorCode> (code));
+
     if (U_FAILURE (e))
     {
-      // We purposefully crash here because if ICU is failing, our assumptions
-      // about text processing are void.
+      // We purposefully crash here. If ICU is failing basic operations, our
+      // assumptions about the text processing environment are void.
       //
       assert (false && "ICU operation failed");
       (void)op;
@@ -219,7 +217,7 @@ namespace mine
     // The `grapheme_index` is a cached view of the string. Here we re-run the
     // segmentation algorithm from scratch to verify the cache hasn't drifted
     // from the raw text (which can happen if we mess up the offset math during
-    // insertions).
+    // complex insertions).
     //
     grapheme_segmentation seg (segment_graphemes (s));
 
