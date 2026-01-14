@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <compare> // C++20: <=>
 #include <cassert>
 
 #include <mine/mine-unicode-grapheme.hxx>
@@ -14,17 +15,12 @@ namespace mine
   // We decoupled the "discovery" of graphemes (ICU BreakIterator, which is
   // heavy and stateful) from the "traversal" (this iterator).
   //
-  // This class assumes you have already paid the cost of segmentation via
-  // `grapheme_index::update()`. Iterating here is just pointer arithmetic
-  // and array indexing, making it safe to use in tight rendering loops (60fps).
   //
   class grapheme_iterator
   {
   public:
-    // Since the underlying segmentation is a vector, we can support random
-    // access. This lets us do things like `std::distance` in O(1).
-    //
     using iterator_category = std::random_access_iterator_tag;
+    using iterator_concept  = std::contiguous_iterator_tag;
     using value_type        = grapheme_cluster;
     using difference_type   = std::ptrdiff_t;
     using pointer           = const grapheme_cluster*;
@@ -32,171 +28,171 @@ namespace mine
 
     grapheme_iterator () = default;
 
-    grapheme_iterator (const grapheme_segmentation* s, std::size_t i)
-      : s_ (s), i_ (i)
+    // We keep this constructor explicit to avoid accidental promotion of raw
+    // pointers into iterators in unrelated contexts.
+    //
+    explicit
+    grapheme_iterator (pointer p) noexcept
+      : current_ (p)
     {
     }
 
-    //
     // Access
     //
 
-    reference
-    operator* () const
+    [[nodiscard]] reference
+    operator* () const noexcept
     {
-      return s_->clusters[i_];
+      return *current_;
     }
 
-    pointer
-    operator-> () const
+    [[nodiscard]] pointer
+    operator-> () const noexcept
     {
-      return &s_->clusters[i_];
+      return current_;
     }
 
-    reference
-    operator[] (difference_type n) const
+    [[nodiscard]] reference
+    operator[] (difference_type n) const noexcept
     {
-      return s_->clusters[i_ + static_cast<std::size_t> (n)];
+      return current_[n];
     }
 
     // Motion
     //
 
     grapheme_iterator&
-    operator++ ()
+    operator++ () noexcept
     {
-      ++i_;
+      ++current_;
       return *this;
     }
 
     grapheme_iterator
-    operator++ (int)
+    operator++ (int) noexcept
     {
       grapheme_iterator r (*this);
-      ++i_;
+      ++current_;
       return r;
     }
 
     grapheme_iterator&
-    operator-- ()
+    operator-- () noexcept
     {
-      --i_;
+      --current_;
       return *this;
     }
 
     grapheme_iterator
-    operator-- (int)
+    operator-- (int) noexcept
     {
       grapheme_iterator r (*this);
-      --i_;
+      --current_;
       return r;
     }
 
     grapheme_iterator&
-    operator+= (difference_type n)
+    operator+= (difference_type n) noexcept
     {
-      i_ += static_cast<std::size_t> (n);
+      current_ += n;
       return *this;
     }
 
     grapheme_iterator&
-    operator-= (difference_type n)
+    operator-= (difference_type n) noexcept
     {
-      i_ -= static_cast<std::size_t> (n);
+      current_ -= n;
       return *this;
     }
 
-    grapheme_iterator
-    operator+ (difference_type n) const
+    [[nodiscard]] grapheme_iterator
+    operator+ (difference_type n) const noexcept
     {
-      return grapheme_iterator (s_, i_ + static_cast<std::size_t> (n));
+      return grapheme_iterator (current_ + n);
     }
 
-    grapheme_iterator
-    operator- (difference_type n) const
+    [[nodiscard]] grapheme_iterator
+    operator- (difference_type n) const noexcept
     {
-      return grapheme_iterator (s_, i_ - static_cast<std::size_t> (n));
+      return grapheme_iterator (current_ - n);
     }
 
-    difference_type
-    operator- (const grapheme_iterator& x) const
+    [[nodiscard]] difference_type
+    operator- (const grapheme_iterator& x) const noexcept
     {
-      return static_cast<difference_type> (i_) -
-             static_cast<difference_type> (x.i_);
+      return current_ - x.current_;
     }
 
     // Comparison
     //
 
     bool
-    operator== (const grapheme_iterator& x) const
+    operator== (const grapheme_iterator& x) const noexcept
     {
-      // Two iterators are equal if they point to the same segmentation
-      // object and the same index within it.
-      //
-      return s_ == x.s_ && i_ == x.i_;
+      return current_ == x.current_;
     }
 
     std::strong_ordering
-    operator<=> (const grapheme_iterator& x) const
+    operator<=> (const grapheme_iterator& x) const noexcept
     {
-      // Undefined Behavior check.
-      //
-      // Comparing iterators from different containers is logically invalid in
-      // C++. There is no "ordering" between an iterator into String A and an
-      // iterator into String B.
-      //
-      assert (s_ == x.s_);
-
-      return i_ <=> x.i_;
+      return current_ <=> x.current_;
     }
 
-    // Raw index access (for when you need to jump back to integer math).
-    //
-    std::size_t
-    index () const
+    [[nodiscard]] pointer
+    base () const noexcept
     {
-      return i_;
+      return current_;
     }
 
   private:
-    const grapheme_segmentation* s_ {nullptr};
-    std::size_t i_ {0};
+    pointer current_ {nullptr};
   };
 
-  // Syntactic sugar for range-based for loops.
+  // Allow symmetry: 1 + it.
   //
-  // Allows writing: `for (const auto& g : make_grapheme_range(seg))`.
+  [[nodiscard]] inline grapheme_iterator
+  operator+ (grapheme_iterator::difference_type n, grapheme_iterator x) noexcept
+  {
+    return x + n;
+  }
+
+  // Syntactic sugar for range-based for loops.
   //
   class grapheme_range
   {
   public:
     explicit
-    grapheme_range (const grapheme_segmentation& s)
+    grapheme_range (const grapheme_segmentation& s) noexcept
       : s_ (&s)
     {
     }
 
-    grapheme_iterator
-    begin () const
+    [[nodiscard]] grapheme_iterator
+    begin () const noexcept
     {
-      return grapheme_iterator (s_, 0);
+      // Assuming s_->clusters is a vector-like container that guarantees
+      // contiguous storage. We take the address of the first element.
+      //
+      // If clusters is empty, data() usually returns a valid pointer (or
+      // nullptr) such that data() == data() + size() is true.
+      //
+      return grapheme_iterator (s_->clusters.data ());
     }
 
-    grapheme_iterator
-    end () const
+    [[nodiscard]] grapheme_iterator
+    end () const noexcept
     {
-      return grapheme_iterator (s_, s_->size ());
+      return grapheme_iterator (s_->clusters.data () + s_->clusters.size ());
     }
 
-    std::size_t
-    size () const
+    [[nodiscard]] std::size_t
+    size () const noexcept
     {
       return s_->size ();
     }
 
-    bool
-    empty () const
+    [[nodiscard]] bool
+    empty () const noexcept
     {
       return s_->empty ();
     }
@@ -207,8 +203,8 @@ namespace mine
 
   // Factory.
   //
-  inline grapheme_range
-  make_grapheme_range (const grapheme_segmentation& s)
+  [[nodiscard]] inline grapheme_range
+  make_grapheme_range (const grapheme_segmentation& s) noexcept
   {
     return grapheme_range (s);
   }

@@ -203,6 +203,7 @@ namespace mine
     // Leave room for status line.
     //
     uint16_t rows (sz.rows > 0 ? sz.rows - 1 : 0);
+    uint16_t limit (sz.cols);
 
     for (uint16_t r (0); r < rows; ++r)
     {
@@ -219,32 +220,45 @@ namespace mine
       }
 
       const auto& l (buf.line_at (ln));
-      auto txt (l.view ());
 
+      // Fast path: skip completely empty lines.
+      //
       if (l.count () == 0)
         continue;
+
+      auto txt (l.view ());
+      const auto& seg (l.idx.get_segmentation ());
 
       // Rendering Text.
       //
       // We iterate logically (graphemes), but we must place them physically
       // (columns).
       //
+      auto rng (make_grapheme_range (seg));
+      auto it (rng.begin ());
+      auto end (rng.end ());
+
       uint16_t col (0);
 
-      const auto& seg (l.idx.get_segmentation ());
-      grapheme_iterator it (&seg, 0);
-      grapheme_iterator end (&seg, seg.size ());
-
-      for (; it != end && col < sz.cols; ++it)
+      // Note: We check `col < limit` inside to handle multi-column
+      // graphemes (wide chars) correctly before drawing.
+      //
+      for (; it != end; ++it)
       {
+        if (col >= limit)
+          break;
+
         auto g (it->text (txt));
         int w (estimate_grapheme_width (g));
 
+        // Sanity check for control characters or zero-width joiners.
+        //
         if (w <= 0) w = 1;
 
-        // Clip if it doesn't fit on the line.
+        // Clip if the grapheme (especially if wide) doesn't fit on the
+        // remainder of the line.
         //
-        if (col + static_cast<uint16_t> (w) > sz.cols)
+        if (col + static_cast<uint16_t> (w) > limit)
           break;
 
         scr.set_grapheme (screen_position (r, col),
@@ -364,18 +378,27 @@ namespace mine
       //
       uint16_t screen_col (0);
 
+      // Fast path: if cursor is at column 0, width is 0.
+      //
       if (c.column ().value > 0)
       {
         const auto& l (buf.line_at (c.line ()));
         auto txt (l.view ());
 
-        std::size_t idx (0);
-        for (grapheme_iterator it (&l.idx.get_segmentation (), 0);
-             it != grapheme_iterator () && idx < c.column ().value;
-             ++it, ++idx)
+        const auto& seg (l.idx.get_segmentation ());
+        auto rng (make_grapheme_range (seg));
+        auto it (rng.begin ());
+        auto end (rng.end ());
+
+        // We need to process 'target' number of graphemes.
+        //
+        std::size_t target (c.column ().value);
+
+        for (; it != end && target > 0; ++it, --target)
         {
           auto g (it->text (txt));
           int w (estimate_grapheme_width (g));
+
           if (w <= 0) w = 1;
 
           screen_col += static_cast<uint16_t> (w);
