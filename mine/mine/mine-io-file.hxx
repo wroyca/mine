@@ -188,7 +188,7 @@ namespace mine
     std::optional<float>
     progress_percent () const noexcept;
 
-    bool operator== (const file_buffer&) const = default;
+    bool operator== (const file_buffer&) const = delete;
   };
 
   // Effects.

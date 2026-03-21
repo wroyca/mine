@@ -106,7 +106,7 @@ namespace mine
     }
 
     auto
-    operator<=> (const state&) const = default;
+    operator<=> (const state&) const = delete;
 
   private:
     text_buffer b_;
