@@ -187,5 +187,3 @@ namespace mine
     });
   }
 }
-
-#endif // MINE_MINE_EDITOR_FILE_HXX
