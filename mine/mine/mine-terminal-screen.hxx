@@ -100,7 +100,7 @@ namespace mine
     //
 
     void
-    set_cell (screen_position p, terminal_cell c)
+    set_cell (screen_position p, const terminal_cell &c)
     {
       at (p) = c;
     }
@@ -144,7 +144,7 @@ namespace mine
     void
     clear ()
     {
-      std::fill (cells_.begin (), cells_.end (), terminal_cell {});
+      std::ranges::fill (cells_, terminal_cell {});
     }
 
     void
@@ -156,7 +156,7 @@ namespace mine
       // this row.
       //
       auto b (cells_.begin () + (row * size_.cols));
-      std::fill (b, b + size_.cols, terminal_cell {});
+      std::fill_n (b, size_.cols, terminal_cell {});
     }
 
     // Resize the canvas, preserving content.

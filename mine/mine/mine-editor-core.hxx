@@ -253,7 +253,7 @@ namespace mine
     // Callback from the IO thread (back on the main thread via post).
     //
     void
-    complete_io (file_io_action a)
+    complete_io (const file_io_action &a)
     {
       auto [nfb, msg] = update_file_buffer (fb_, a);
       fb_ = std::move (nfb);
