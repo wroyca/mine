@@ -64,7 +64,7 @@ namespace mine
   // The structure is generally: CSI [params] [intermediates] final_byte
   //
   input_event csi_parser::
-  interpret_sequence (char final,
+  interpret_sequence (char f,
                       const vector<int>& p,
                       string_view /*inter*/,
                       char prefix)
@@ -85,13 +85,25 @@ namespace mine
     //
     // We check the prefix '<' to confirm SGR format.
     //
-    if (prefix == '<' && (final == 'M' || final == 'm'))
+    if (prefix == '<' && (f == 'M' || f == 'm'))
     {
       if (p.size () >= 3)
       {
         int pb (p[0]);
-        uint16_t x (p[1] > 0 ? p[1] - 1 : 0); // 1-based -> 0-based
+
+        // Coordinates are 1-based in the terminal. Translate them to 0-based
+        // for our internal representation.
+        //
+        uint16_t x (p[1] > 0 ? p[1] - 1 : 0);
         uint16_t y (p[2] > 0 ? p[2] - 1 : 0);
+
+        // Determine the overall mouse state. Note that 'm' explicitly
+        // indicates a release. If it is 'M', it can be either a press
+        // or a drag, which we disambiguate using the motion bit (0x20).
+        //
+        mouse_state s (f == 'm'         ? mouse_state::release :
+                       (pb & 0x20) != 0 ? mouse_state::drag    :
+                                          mouse_state::press);
 
         // Extract modifiers embedded in the button code (bits 2,3,4).
         //
@@ -99,19 +111,17 @@ namespace mine
         if (pb & 8)  m = m | key_modifier::alt;
         if (pb & 16) m = m | key_modifier::ctrl;
 
-        // Mask out everything except the raw button ID.
+        // Strip out everything but the raw button ID. We mask out the modifiers
+        // (0x1c) and the motion bit (0x20), so we clear 0x3c.
         //
-        // 0-2: Left, Middle, Right
-        // 64:  Scroll Up
-        // 65:  Scroll Down
+        // Note that the resulting values are:
         //
-        // We mask out:
-        // - Modifiers (4,8,16)
-        // - Motion bit (32)
+        // 00, 01, 02 : Left, Middle, Right.
+        // 64, 65     : Scroll Up, Down.
         //
-        uint8_t btn (static_cast<uint8_t> (pb & ~0x3C));
+        uint8_t b (static_cast<uint8_t> (pb & ~0x3C));
 
-        return mouse_event {x, y, btn, m};
+        return mouse_event {x, y, b, m, s};
       }
     }
 
@@ -119,14 +129,14 @@ namespace mine
     //
     // These typically end in A-H (e.g., UP is 'A').
     //
-    if (final >= 'A' && final <= 'H')
-      return special_key_event {map_cursor_key (final), m};
+    if (f >= 'A' && f <= 'H')
+      return special_key_event {map_cursor_key (f), m};
 
     // Tilde sequences (Function/Editing keys).
     //
     // These look like ESC [ <num> ~ (e.g., PageUp is "5~").
     //
-    if (final == '~' && !p.empty ())
+    if (f == '~' && !p.empty ())
       return special_key_event {map_function_key (p[0]), m};
 
     // If we got here, we don't recognize the sequence. Fallback to acting

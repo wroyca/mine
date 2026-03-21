@@ -106,6 +106,15 @@ namespace mine
     bool operator== (const special_key_event&) const = default;
   };
 
+  // Mouse state during the event.
+  //
+  enum class mouse_state : std::uint8_t
+  {
+    press,
+    release,
+    drag
+  };
+
   // Mouse interaction (via XTerm SGR protocol).
   //
   struct mouse_event
@@ -114,6 +123,7 @@ namespace mine
     std::uint16_t y;
     std::uint8_t  button;
     key_modifier  modifiers;
+    mouse_state   state;
 
     bool operator== (const mouse_event&) const = default;
   };
