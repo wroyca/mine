@@ -102,7 +102,7 @@ namespace mine
     void
     set_cell (screen_position p, const terminal_cell &c)
     {
-      at (p) = c;
+      at (p) = std::move (c);
     }
 
     // Convenience helper for writing simple ASCII.

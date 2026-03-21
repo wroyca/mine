@@ -111,8 +111,8 @@ namespace mine
     }
 
     explicit
-    terminal_editor_app (const string& f)
-        : file_ (f)
+    terminal_editor_app (string f)
+        : file_ (std::move(f))
     {
       g_raw = &raw_;
       init ();
@@ -203,7 +203,7 @@ namespace mine
       auto s (core_.current ());
       auto v (s.view ().resize (*sz));
 
-      core_ = editor_core (loop_, s.with_view (move (v)));
+      core_ = editor_core (loop_, s.with_view (v));
       ren_ = make_unique<terminal_renderer> (*sz);
 
       // Wire up Logic -> UI.
