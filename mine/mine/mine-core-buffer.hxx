@@ -415,6 +415,62 @@ namespace mine
       return text_buffer (std::move (r));
     }
 
+std::string
+    get_range (cursor_position b, cursor_position e) const
+    {
+      MINE_PRECONDITION (b.line.value <= e.line.value);
+      MINE_PRECONDITION (contains (b.line));
+      MINE_PRECONDITION (contains (e.line));
+
+      if (b.line == e.line)
+      {
+        // Bail out early if the range is completely empty.
+        //
+        if (b.column == e.column)
+          return "";
+
+        // We are spanning a single line, so just extract the substring between
+        // the two byte offsets.
+        //
+        const auto& l (lines_[b.line.value]);
+
+        std::size_t bo (l.idx.index_to_byte (b.column.value));
+        std::size_t eo (l.idx.index_to_byte (e.column.value));
+
+        return std::string (l.view ().substr (bo, eo - bo));
+      }
+
+      std::string r;
+
+      // Handle the beginning line. We extract everything from the starting
+      // column offset to the end of the line, and tack on the trailing newline.
+      //
+      const auto& bl (lines_[b.line.value]);
+      std::size_t bo (bl.idx.index_to_byte (b.column.value));
+
+      r.append (bl.view ().substr (bo));
+      r.push_back ('\n');
+
+      // Append any intermediate lines entirely. Notice we include the newline
+      // characters to reconstruct the exact spanned block.
+      //
+      for (std::size_t i (b.line.value + 1); i < e.line.value; ++i)
+      {
+        r.append (lines_[i].view ());
+        r.push_back ('\n');
+      }
+
+      // Finally, process the ending line up to the column offset. We don't
+      // append a newline here since the range terminates mid-line.
+      //
+      const auto& el (lines_[e.line.value]);
+      std::size_t eo (el.idx.index_to_byte (e.column.value));
+
+      r.append (el.view ().substr (0, eo));
+
+      return r;
+    }
+
     const lines_type&
     lines () const noexcept
     {

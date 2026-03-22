@@ -4,6 +4,9 @@
 #include <mine/mine-command-insert.hxx>
 #include <mine/mine-command-delete.hxx>
 #include <mine/mine-command-selection.hxx>
+#include <mine/mine-command-undo.hxx>
+#include <mine/mine-command-redo.hxx>
+#include <mine/mine-command-clipboard.hxx>
 
 using namespace std;
 
@@ -32,11 +35,20 @@ namespace mine
         // command shortcut (e.g., Ctrl-s for save, Ctrl-q for quit) rather
         // than literal text insertion.
         //
-        // So let these fall through to the global key binder/shortcut handler
-        // which sits above this translator.
-        //
         if (has_modifier (x.modifiers, key_modifier::ctrl))
-          return nullptr;
+        {
+          if (x.text == "z")
+            return make_unique<undo_command> ();
+
+          if (x.text == "y")
+            return make_unique<redo_command> ();
+
+          if (x.text == "c")
+            return make_unique<copy_command> ();
+
+          if (x.text == "v")
+            return make_unique<paste_command> ();
+        }
 
         return make_unique<insert_text_command> (x.text);
       }

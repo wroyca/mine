@@ -13,7 +13,7 @@ namespace mine
   class delete_backward_command: public command
   {
   public:
-    virtual editor_state
+    editor_state
     execute (const editor_state& s) const override
     {
       auto b (s.buffer ());

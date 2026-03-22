@@ -60,6 +60,20 @@ namespace mine
     void
     dispatch (const command& cmd)
     {
+      // Meta-commands that bypass standard state execution.
+      //
+      if (cmd.name () == "undo")
+      {
+        undo ();
+        return;
+      }
+
+      if (cmd.name () == "redo")
+      {
+        redo ();
+        return;
+      }
+
       const auto& pre (h_.current ());
       auto post (cmd.execute (pre));
 
