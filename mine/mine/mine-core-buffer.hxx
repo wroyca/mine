@@ -408,10 +408,9 @@ namespace mine
       // Qestion: How many lines do we need to kill?
       //
       // Answer: It's the diff between end and start.
+      // But also, the end line has its suffix absorbed into the start line.
       //
-      std::size_t n (e.line.value - b.line.value);
-
-      r = r.erase (b.line.value + 1, n);
+      r = r.erase (b.line.value + 1, e.line.value + 1);
 
       return text_buffer (std::move (r));
     }

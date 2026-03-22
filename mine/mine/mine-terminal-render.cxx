@@ -246,7 +246,10 @@ namespace mine
       {
         cursor_position ep (ln, column_number (0));
 
-        if (hs && ep >= ss && ep < se && lim > 0)
+        // Note that we let the hardware cursor double as visual selection
+        // highlight to prevent double-inversion.
+        //
+        if (hs && ep >= ss && ep <= se && ep != c.position () && lim > 0)
         {
           cell_attributes ca;
           ca.fg = 0;
@@ -297,7 +300,11 @@ namespace mine
           break;
 
         cursor_position cp (ln, column_number (lc));
-        bool sel (hs && cp >= ss && cp < se);
+
+        // Exclude the cell under the cursor from explicit highlight coloring to
+        // avoid "double inversion" where the hardware cursor sits
+        //
+        bool sel (hs && cp >= ss && cp <= se && cp != c.position ());
 
         cell_attributes ca;
 
@@ -319,7 +326,7 @@ namespace mine
       //
       cursor_position ep (ln, column_number (lc));
 
-      if (hs && ep >= ss && ep < se && col < lim)
+      if (hs && ep >= ss && ep <= se && ep != c.position () && col < lim)
       {
         cell_attributes ca;
         ca.fg = 0;

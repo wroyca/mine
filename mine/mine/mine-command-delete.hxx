@@ -16,23 +16,49 @@ namespace mine
     virtual editor_state
     execute (const editor_state& s) const override
     {
-      const auto& b (s.buffer ());
-      const auto& c (s.get_cursor ());
+      auto b (s.buffer ());
+      auto c (s.get_cursor ());
 
-      // First, try to step back one grapheme.
+      // See if we have an active selection. If so, backspace simply deletes
+      // the marked region.
+      //
+      if (c.has_mark () && c.mark () != c.position ())
+      {
+        auto p1 (std::min (c.position (), c.mark ()));
+        auto p2 (std::max (c.position (), c.mark ()));
+
+        // Note that terminal cell selections are inclusive. So we must step
+        // the end boundary forward by one grapheme to make the exclusive
+        // delete_range cover it.
+        //
+        auto e (cursor (p2).move_right (b).position ());
+
+        auto nb (b.delete_range (p1, e));
+        auto nc (c.move_to (p1));
+
+        nc.clear_mark ();
+
+        return s.update (std::move (nb), nc);
+      }
+
+      // Clear the empty mark so it doesn't linger and cause trouble later.
+      //
+      c.clear_mark ();
+
+      // First, try to step back by one grapheme.
       //
       auto nc (c.move_left (b));
 
-      // If the cursor position didn't change, we are at the beginning of the
-      // buffer and there is nothing to delete.
+      // If the cursor position didn't change, we must be at the very beginning
+      // of the buffer. In this case, there is naturally nothing left to delete.
       //
       if (nc.position () == c.position ())
-        return s;
+        return s.with_cursor (c);
 
-      // Otherwise, delete the grapheme at the new cursor position.
+      // Otherwise, delete the grapheme at the newly computed position.
       //
-      // Note: delete_next_grapheme() handles line merging if the position
-      // points to a newline logic internally.
+      // Note that we rely on delete_next_grapheme() to internally take care of
+      // the line merging logic if this position happens to point to a newline.
       //
       auto nb (b.delete_next_grapheme (nc.position ()));
 
@@ -59,35 +85,61 @@ namespace mine
   // technically unchanged, though the content shifts "left" to fill the
   // void.
   //
-  class delete_forward_command: public command
+  class delete_forward_command : public command
   {
   public:
     virtual editor_state
     execute (const editor_state& s) const override
     {
-      const auto& b (s.buffer ());
-      const auto& c (s.get_cursor ());
-      const auto pos (c.position ());
+      auto b (s.buffer ());
+      auto c (s.get_cursor ());
 
-      // Check if we are at the absolute end of the buffer. If so, there is
-      // nothing "forward" to delete.
+      // See if we have an active selection. If so, delete simply removes
+      // the marked region.
       //
-      if (pos.line.value >= b.line_count ())
-        return s;
+      if (c.has_mark () && c.mark () != c.position ())
+      {
+        auto p1 (std::min (c.position (), c.mark ()));
+        auto p2 (std::max (c.position (), c.mark ()));
 
-      // Also check if we are at the very end of the last line (past the last
-      // character). Unlike other lines where this would trigger a merge with
-      // the next line, here it's a no-op.
+        // Note that terminal cell selections are inclusive. So we must step the
+        // end boundary forward by one grapheme to make the exclusive
+        // delete_range cover it.
+        //
+        auto e (cursor (p2).move_right (b).position ());
+
+        auto nb (b.delete_range (p1, e));
+        auto nc (c.move_to (p1));
+
+        nc.clear_mark ();
+
+        return s.update (std::move (nb), nc);
+      }
+
+      c.clear_mark (); // Clear empty mark, if any.
+      const auto p (c.position ());
+
+      // See if we are already at the absolute end of the buffer. If so, there is
+      // naturally nothing further to delete.
       //
-      if (pos.line.value == b.line_count () - 1 &&
-          pos.column.value >= b.line_length (pos.line))
-        return s;
+      if (p.line.value >= b.line_count ())
+        return s.with_cursor (c);
 
-      // Delete the grapheme at the current cursor position.
+      // We must also handle the boundary case where we sit exactly past the
+      // last character of the final line. For any normal line this situation
+      // would trigger a merge with the line below, but for the final line
+      // it amounts to a no-op.
       //
-      auto nb (b.delete_next_grapheme (pos));
+      if (p.line.value == b.line_count () - 1 &&
+          p.column.value >= b.line_length (p.line))
+        return s.with_cursor (c);
 
-      return s.update (std::move (nb), c);
+      // At this point we can safely delete the next grapheme starting from the
+      // current position.
+      //
+      auto b1 (b.delete_next_grapheme (p));
+
+      return s.update (std::move (b1), c);
     }
 
     virtual std::string_view

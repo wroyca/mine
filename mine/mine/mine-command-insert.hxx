@@ -28,28 +28,50 @@ namespace mine
     virtual editor_state
     execute (const editor_state& s) const override
     {
-      const auto& b (s.buffer ());
-      const auto& c (s.get_cursor ());
+      auto b (s.buffer ());
+      auto c (s.get_cursor ());
 
-      // Sanity check: the input layer gave us valid UTF-8.
+      // See if we have an active selection. If so, typing replaces the
+      // marked region. First, we clear out the selected text.
+      //
+      if (c.has_mark () && c.mark () != c.position ())
+      {
+        auto p1 (std::min (c.position (), c.mark ()));
+        auto p2 (std::max (c.position (), c.mark ()));
+
+        // Step the end boundary forward to account for inclusive selection.
+        //
+        auto e (cursor (p2).move_right (b).position ());
+
+        b = b.delete_range (p1, e);
+        c = c.move_to (p1);
+      }
+
+      c.clear_mark ();
+
+      // Sanity check: verify the input layer gave us valid UTF-8. It really
+      // should have, but better safe than sorry before we commit to the buffer.
       //
       assert_valid_utf8 (text_);
 
-      // Insert the grapheme sequence into the buffer at the current position.
+      // Now inject the grapheme sequence into the buffer right at the current
+      // cursor position.
       //
-      auto nb (b.insert_graphemes (c.position (), text_));
+      b = b.insert_graphemes (c.position (), text_);
 
-      // Calculate the new cursor position.
+      // Figure out where the cursor ends up.
       //
-      // Since we assume the text contains no newlines (it's a horizontal
-      // insertion), we can simply advance the column index by the number of
-      // graphemes inserted.
+      // Since we assume the text contains no newlines (that is, it's strictly
+      // a horizontal insertion), we don't need to recalculate the line. We can
+      // simply advance the column index by the number of graphemes we just
+      // inserted.
       //
       std::size_t n (count_graphemes (text_));
-      cursor nc (cursor_position (c.line (),
-                                  column_number (c.column ().value + n)));
 
-      return s.update (std::move (nb), nc);
+      c = c.move_to (
+        cursor_position (c.line (), column_number (c.column ().value + n)));
+
+      return s.update (std::move (b), c);
     }
 
     virtual std::string_view
@@ -73,25 +95,44 @@ namespace mine
   // This operation splits the current line at the cursor position and moves
   // the cursor to the beginning (column 0) of the newly created line.
   //
-  class insert_newline_command: public command
+  class insert_newline_command : public command
   {
   public:
     virtual editor_state
     execute (const editor_state& s) const override
     {
-      const auto& b (s.buffer ());
-      const auto& c (s.get_cursor ());
+      auto b (s.buffer ());
+      auto c (s.get_cursor ());
 
-      // Split the line in the buffer.
+      // See if we have an active selection. If so, hitting enter replaces the
+      // marked region. First, we drop the existing selection.
       //
-      auto nb (b.insert_newline (c.position ()));
+      if (c.has_mark () && c.mark () != c.position ())
+      {
+        auto p1 (std::min (c.position (), c.mark ()));
+        auto p2 (std::max (c.position (), c.mark ()));
 
-      // Move the cursor to the start of the next line.
+        // Step the end boundary forward to account for inclusive selection.
+        //
+        auto e (cursor (p2).move_right (b).position ());
+
+        b = b.delete_range (p1, e);
+        c = c.move_to (p1);
+      }
+
+      c.clear_mark ();
+
+      // Now actually split the line in the buffer right at our current
+      // cursor position.
       //
-      cursor nc (cursor_position (line_number (c.line ().value + 1),
-                                  column_number (0)));
+      b = b.insert_newline (c.position ());
 
-      return s.update (std::move (nb), nc);
+      // Finally, advance the cursor down to the start of the next line.
+      //
+      c = c.move_to (cursor_position (line_number (c.line ().value + 1),
+                                      column_number (0)));
+
+      return s.update (std::move (b), c);
     }
 
     virtual std::string_view
