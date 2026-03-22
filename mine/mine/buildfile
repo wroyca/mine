@@ -3,6 +3,7 @@ import libs += libboost-asio%lib{boost_asio}
 import libs += libcpptrace%lib{cpptrace}
 import libs += libimmer%lib{immer}
 import libs += libicui18n%lib{icui18n}
+import libs += glfw%lib{glfw}
 
 exe{mine}: {hxx ixx txx cxx}{**} $libs
 
