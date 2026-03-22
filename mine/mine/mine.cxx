@@ -1,4 +1,3 @@
-#include "mine/mine-window-opengl.hxx"
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -9,12 +8,14 @@
 
 // #include <cpptrace/cpptrace.hpp>
 
+#include <mine/mine-assert.hxx>
+#include <mine/mine-async-input.hxx>
+#include <mine/mine-async-loop.hxx>
 #include <mine/mine-editor-core.hxx>
 #include <mine/mine-terminal-raw.hxx>
 #include <mine/mine-terminal-render.hxx>
-#include <mine/mine-async-loop.hxx>
-#include <mine/mine-async-input.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-window-opengl.hxx>
+#include <mine/mine-window-render.hxx>
 #include <mine/mine-window.hxx>
 
 using namespace std;
@@ -382,7 +383,9 @@ namespace mine
         //
         if (dirty_)
         {
+          ren_.render (core_.current ());
           win_.swap_buffers ();
+
           dirty_ = false;
         }
       }
@@ -432,6 +435,7 @@ namespace mine
     editor_core core_ {loop_};
     window win_;
     opengl_context gl_;
+    window_renderer ren_;
 
     string file_;
     bool quit_;
