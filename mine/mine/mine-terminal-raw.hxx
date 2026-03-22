@@ -155,7 +155,8 @@ namespace mine
         // We ignore the write result because if stdout is broken, we have
         // bigger problems, and we are about to set enabled_ = true anyway.
         //
-        if (write (STDOUT_FILENO, "\x1b[?1000h\x1b[?1006h", 20) != -1)
+        const char enable_mouse[] = "\x1b[?1002h\x1b[?1006h";
+        if (write (STDOUT_FILENO, enable_mouse, sizeof(enable_mouse) - 1) != -1)
           enabled_ = true;
         else
           tcsetattr (STDIN_FILENO, TCSAFLUSH, &original_termios_);
@@ -173,10 +174,10 @@ namespace mine
         // otherwise the user won't be able to select text in their terminal
         // using the mouse.
         //
-        // ?1000l: Disable button reporting. ?1006l: Disable SGR.
+        // ?1002l: Disable cell motion reporting. ?1006l: Disable SGR.
         //
-        write (STDOUT_FILENO, "\x1b[?1000l\x1b[?1006l", 20);
-
+        const char disable_mouse[] = "\x1b[?1002l\x1b[?1006l";
+        write (STDOUT_FILENO, disable_mouse, sizeof (disable_mouse) - 1);
         tcsetattr (STDIN_FILENO, TCSAFLUSH, &original_termios_);
         enabled_ = false;
       }

@@ -104,4 +104,7 @@ namespace mine
     void
     end_sync_update ();
   };
+
+  int
+  estimate_grapheme_width (std::string_view g);
 }

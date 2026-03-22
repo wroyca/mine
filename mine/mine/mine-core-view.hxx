@@ -84,6 +84,15 @@ namespace mine
       return static_cast<std::uint16_t> (l.value - top_.value);
     }
 
+    // Map a physical terminal coordinate back to a logical buffer coordinate.
+    //
+    // Since the view owns the vertical scroll offset (top_), it is the natural
+    // authority for translating physical screen clicks into logical document
+    // positions.
+    //
+    cursor_position
+    screen_to_buffer (screen_position p, const text_buffer& b) const noexcept;
+
     // Scrolling Logic
     //
 

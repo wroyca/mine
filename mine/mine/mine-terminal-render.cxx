@@ -157,7 +157,7 @@ namespace mine
   //
   // If we guess wrong, our rendering desyncs from the terminal's.
   //
-  static int
+  int
   estimate_grapheme_width (string_view g)
   {
     if (g.empty ())
@@ -194,79 +194,138 @@ namespace mine
   }
 
   void terminal_renderer::
-  draw_buffer (terminal_screen& scr, const editor_state& s) const
+  draw_buffer (terminal_screen& ts, const editor_state& s) const
   {
-    const auto& buf (s.buffer ());
+    const auto& b (s.buffer ());
     const auto& v (s.view ());
-    auto sz (scr.size ());
+    const auto& c (s.get_cursor ());
+    auto sz (ts.size ());
 
-    // Leave room for status line.
+    // Figure out the selection bounds upfront. We normalize them so that the
+    // start is always before the end, which makes our hit-testing during
+    // rendering trivial.
     //
-    uint16_t rows (sz.rows > 0 ? sz.rows - 1 : 0);
-    uint16_t limit (sz.cols);
+    bool hs (c.has_mark ());
+    cursor_position ss (c.position ());
+    cursor_position se (c.position ());
 
-    for (uint16_t r (0); r < rows; ++r)
+    if (hs)
+    {
+      ss = min (c.mark (), c.position ());
+      se = max (c.mark (), c.position ());
+    }
+
+    // Leave the bottom row for the status line. If the terminal is
+    // pathologically small (0 rows), we just don't draw any text rows.
+    //
+    uint16_t rws (sz.rows > 0 ? sz.rows - 1 : 0);
+    uint16_t lim (sz.cols);
+
+    for (uint16_t r (0); r < rws; ++r)
     {
       line_number ln (v.top ().value + r);
 
-      // Past EOF? Draw the "empty void" tilde.
+      // Are we past the end of the file? If so, we just draw the standard empty
+      // void tilde and move on to the next row.
       //
-      if (ln.value >= buf.line_count ())
+      if (ln.value >= b.line_count ())
       {
-        scr.set_char (screen_position (r, 0),
-                      '~',
-                      cell_attributes {.fg = 12}); // Bright Blue
+        cell_attributes ca;
+        ca.fg = 12; // bright blue
+
+        ts.set_char (screen_position (r, 0), '~', ca);
         continue;
       }
 
-      const auto& l (buf.line_at (ln));
+      const auto& l (b.line_at (ln));
 
-      // Fast path: skip completely empty lines.
+      // Fast path for empty lines. We only need to care about whether this line
+      // falls inside an active multi-line selection.
       //
       if (l.count () == 0)
+      {
+        cursor_position ep (ln, column_number (0));
+
+        if (hs && ep >= ss && ep < se && lim > 0)
+        {
+          cell_attributes ca;
+          ca.fg = 0;
+          ca.bg = 7; // inverted
+
+          ts.set_char (screen_position (r, 0), ' ', ca);
+        }
         continue;
+      }
 
       auto txt (l.view ());
       const auto& seg (l.idx.get_segmentation ());
 
-      // Rendering Text.
+      // Render the text.
       //
-      // We iterate logically (graphemes), but we must place them physically
-      // (columns).
+      // We iterate over the logical graphemes but we have to place them
+      // physically into screen columns. This means we have to keep track of
+      // both logical and physical progression.
       //
       auto rng (make_grapheme_range (seg));
-      auto it (rng.begin ());
-      auto end (rng.end ());
+      auto i (rng.begin ());
+      auto e (rng.end ());
 
       uint16_t col (0);
+      std::size_t lc (0);
 
-      // Note: We check `col < limit` inside to handle multi-column
-      // graphemes (wide chars) correctly before drawing.
+      // Note that we check 'col < lim' inside the loop rather than in the
+      // condition. That is, we need to handles wide characters by preventing
+      // partial drawing if a double-width char exceeds the edge.
       //
-      for (; it != end; ++it)
+      for (; i != e; ++i)
       {
-        if (col >= limit)
+        if (col >= lim)
           break;
 
-        auto g (it->text (txt));
+        auto g (i->text (txt));
         int w (estimate_grapheme_width (g));
 
-        // Sanity check for control characters or zero-width joiners.
+        // Sanity check for weird control characters or zero-width joiners that
+        // might throw off our physical column count.
         //
-        if (w <= 0) w = 1;
+        if (w <= 0)
+          w = 1;
 
-        // Clip if the grapheme (especially if wide) doesn't fit on the
-        // remainder of the line.
+        // Clip if the grapheme doesn't fit on the remainder of the line.
         //
-        if (col + static_cast<uint16_t> (w) > limit)
+        if (col + static_cast<uint16_t> (w) > lim)
           break;
 
-        scr.set_grapheme (screen_position (r, col),
-                          g,
-                          cell_attributes {},
-                          w == 2);
+        cursor_position cp (ln, column_number (lc));
+        bool sel (hs && cp >= ss && cp < se);
+
+        cell_attributes ca;
+
+        if (sel)
+        {
+          ca.fg = 0;
+          ca.bg = 7;
+        }
+
+        ts.set_grapheme (screen_position (r, col), g, ca, w == 2);
 
         col += static_cast<uint16_t> (w);
+        lc++;
+      }
+
+      // We also need to handle the multi-line selection wrap. If the selection
+      // spans across lines, we draw an inverted space at the end of the line to
+      // visually indicate the newline is selected.
+      //
+      cursor_position ep (ln, column_number (lc));
+
+      if (hs && ep >= ss && ep < se && col < lim)
+      {
+        cell_attributes ca;
+        ca.fg = 0;
+        ca.bg = 7;
+
+        ts.set_char (screen_position (r, col), ' ', ca);
       }
     }
   }

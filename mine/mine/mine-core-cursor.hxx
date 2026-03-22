@@ -51,13 +51,59 @@ namespace mine
       return p_.column;
     }
 
+    // Selection mark.
+    //
+
+    // Set the selection mark at the current point.
+    //
+    // This anchors one end of the selection. Note that as the point moves
+    // subsequently, the region between the mark and the point forms the
+    // active selection highlight.
+    //
+    void
+    set_mark () noexcept
+    {
+      m_ = p_;
+    }
+
+    // Clear the active selection.
+    //
+    // We typically trigger this when the user presses Escape or performs
+    // an action that cancels the highlight.
+    //
+    void
+    clear_mark () noexcept
+    {
+      m_.reset ();
+    }
+
+    // Return true if we have an active selection.
+    //
+    bool
+    has_mark () const noexcept
+    {
+      return m_.has_value ();
+    }
+
+    // Get the current mark position.
+    //
+    cursor_position
+    mark () const noexcept
+    {
+      MINE_PRECONDITION (has_mark ());
+
+      return *m_;
+    }
+
     // Navigation
     //
 
     cursor
     move_to (cursor_position p) const noexcept
     {
-      return cursor (p);
+      cursor c (*this);
+      c.p_ = p;
+      return c;
     }
 
     // Move backwards (Left Arrow).
@@ -214,8 +260,15 @@ namespace mine
     cursor
     clamp_to_buffer (const text_buffer& b) const noexcept
     {
+      cursor c (*this);
+
       if (b.line_count () == 0)
-        return cursor (cursor_position (line_number (0), column_number (0)));
+      {
+        c.p_ = cursor_position (line_number (0), column_number (0));
+        if (c.m_)
+          c.m_ = c.p_;
+        return c;
+      }
 
       // 1. Clamp line index.
       //
@@ -224,9 +277,19 @@ namespace mine
       // 2. Clamp column index.
       //
       std::size_t n (b.line_length (l));
-      column_number c (std::min (p_.column.value, n));
+      column_number cn (std::min (p_.column.value, n));
 
-      return cursor (cursor_position (l, c));
+      c.p_ = cursor_position (l, cn);
+
+      if (c.m_)
+      {
+        line_number ml (std::min (c.m_->line.value, b.line_count () - 1));
+        std::size_t mn (b.line_length (ml));
+        column_number mc (std::min (c.m_->column.value, mn));
+        c.m_ = cursor_position (ml, mc);
+      }
+
+      return c;
     }
 
     auto
@@ -234,5 +297,9 @@ namespace mine
 
   private:
     cursor_position p_;
+
+    // The selection anchor. If this has a value, a selection is active.
+    //
+    std::optional<cursor_position> m_;
   };
 }

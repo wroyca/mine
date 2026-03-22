@@ -3,6 +3,7 @@
 #include <mine/mine-command-move.hxx>
 #include <mine/mine-command-insert.hxx>
 #include <mine/mine-command-delete.hxx>
+#include <mine/mine-command-selection.hxx>
 
 using namespace std;
 
@@ -66,7 +67,7 @@ namespace mine
           case special_key::delete_key: return make_unique<delete_forward_command> ();
           case special_key::enter:      return make_unique<insert_newline_command> ();
 
-          default: return nullptr;
+          default: break;
         }
       }
       // Mouse events.
@@ -87,17 +88,40 @@ namespace mine
         //
         if (x.button == 64)
           return make_unique<move_cursor_command> (move_direction::scroll_up);
-        else if (x.button == 65)
+
+        if (x.button == 65)
           return make_unique<move_cursor_command> (move_direction::scroll_down);
 
-        return nullptr;
+        // Handle the left mouse button for text selection.
+        //
+        // Note that we branch on the state we captured in the SGR parser to
+        // determine the phase of the selection.
+        //
+        if (x.button == 0)
+        {
+          switch (x.state)
+          {
+          case mouse_state::press:
+            // Triggered on the initial left click down.
+            //
+            return make_unique<begin_selection_command> (x.x, x.y);
+
+          case mouse_state::drag:
+            // Triggered as the mouse moves while holding the left click.
+            //
+            return make_unique<update_selection_command> (x.x, x.y);
+
+          case mouse_state::release:
+            // Triggered when the left click is released.
+            //
+            return make_unique<end_selection_command> (x.x, x.y);
+          }
+        }
       }
+
       // Ignore everything else (resize events, unknown variants, etc).
       //
-      else
-      {
-        return nullptr;
-      }
+      return nullptr;
     }, e);
   }
 }
