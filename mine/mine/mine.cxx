@@ -1,3 +1,4 @@
+#include "mine/mine-window-opengl.hxx"
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -6,7 +7,7 @@
 
 #include <boost/asio/signal_set.hpp>
 
-#include <cpptrace/cpptrace.hpp>
+// #include <cpptrace/cpptrace.hpp>
 
 #include <mine/mine-editor-core.hxx>
 #include <mine/mine-terminal-raw.hxx>
@@ -87,7 +88,7 @@ namespace mine
       cerr << "\nCAUGHT SIGABRT (" << s << ")\n"
            << "Stack trace at abort:\n";
 
-      cpptrace::generate_trace ().print ();
+      // cpptrace::generate_trace ().print ();
       cerr << endl;
 
       // Unhook ourselves and re-raise to let the OS generate the core dump
@@ -337,6 +338,7 @@ namespace mine
   public:
     window_editor_app ()
       : win_ (1024, 768, "mine"),
+        gl_ (),
         quit_ (false),
         dirty_ (true)
     {
@@ -345,6 +347,7 @@ namespace mine
 
     explicit window_editor_app (string f)
       : win_ (1024, 768, "mine"),
+        gl_ (),
         file_ (std::move (f)),
         quit_ (false),
         dirty_ (true)
@@ -428,6 +431,7 @@ namespace mine
     async_loop loop_;
     editor_core core_ {loop_};
     window win_;
+    opengl_context gl_;
 
     string file_;
     bool quit_;

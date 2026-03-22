@@ -4,7 +4,7 @@
 #include <exception>
 #include <source_location>
 
-#include <cpptrace/cpptrace.hpp>
+// #include <cpptrace/cpptrace.hpp>
 
 namespace mine
 {
@@ -36,7 +36,7 @@ namespace mine
     // latency doesn't matter.
     //
     std::cerr << "  stack trace:\n";
-    cpptrace::generate_trace ().print ();
+    // cpptrace::generate_trace ().print ();
     std::cerr << std::endl;
 
     std::terminate ();
