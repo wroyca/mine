@@ -14,6 +14,7 @@
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-async-input.hxx>
 #include <mine/mine-assert.hxx>
+#include <mine/mine-window.hxx>
 
 using namespace std;
 
@@ -328,6 +329,110 @@ namespace mine
     string last_msg_;
     bool   quit_ = false;
   };
+
+  // The GUI Application Context
+  //
+  class window_editor_app
+  {
+  public:
+    window_editor_app ()
+      : win_ (1024, 768, "mine"),
+        quit_ (false),
+        dirty_ (true)
+    {
+      init ();
+    }
+
+    explicit window_editor_app (string f)
+      : win_ (1024, 768, "mine"),
+        file_ (std::move (f)),
+        quit_ (false),
+        dirty_ (true)
+    {
+      init ();
+    }
+
+    void
+    run ()
+    {
+      // The GUI Event Loop.
+      //
+      // Unlike the terminal backend which blocks cleanly on STDIN using
+      // Asio, GLFW fundamentally expects to own the main thread's event
+      // pump. We must interleave Asio's poll to process background IO.
+      //
+      while (!win_.closing () && !quit_)
+      {
+        win_.update ();
+
+        // Drain any pending asynchronous operations (file IO, etc).
+        //
+        // We use poll() rather than run() so we do not block the thread
+        // if the ASIO queue is empty.
+        //
+        loop_.context ().poll ();
+
+        if (loop_.context ().stopped ())
+          loop_.context ().restart ();
+
+        // TODO: Actually render the OpenGL quad here.
+        //
+        if (dirty_)
+        {
+          win_.swap_buffers ();
+          dirty_ = false;
+        }
+      }
+    }
+
+  private:
+    void
+    init ()
+    {
+      // Bootstrap Core.
+      //
+      // Since we lack an OpenGL font renderer right now, we just fake a
+      // standard terminal grid size so the core doesn't crash trying to
+      // resize a zero-bound view.
+      //
+      screen_size sz (24, 80);
+
+      auto s (core_.current ());
+      auto v (s.view ().resize (sz));
+
+      core_ = editor_core (loop_, s.with_view (v));
+
+      // Wire up Logic -> UI.
+      //
+      core_.on_change (
+        [this] (const editor_state& /*st*/, state_change_type /*t*/)
+      {
+        // Flag for redraw on the next frame.
+        //
+        dirty_ = true;
+      });
+
+      core_.on_message ([this] (const string& m)
+      {
+        // TODO: Route to GUI status bar.
+        //
+        (void) m;
+      });
+
+      // Load Initial File.
+      //
+      if (!file_.empty ())
+        core_.load (file_);
+    }
+
+    async_loop loop_;
+    editor_core core_ {loop_};
+    window win_;
+
+    string file_;
+    bool quit_;
+    bool dirty_;
+  };
 }
 
 int
@@ -335,22 +440,53 @@ main (int argc, char* argv[])
 {
   try
   {
-    if (argc > 1)
+    bool gui (false);
+    std::string f;
+
+    // A very simple argument parser. We look for a --gui switch, and assume
+    // the first non-switch argument is the filename.
+    //
+    for (int i (1); i < argc; ++i)
     {
-      mine::terminal_editor_app app (argv[1]);
-      app.run ();
+      std::string a (argv[i]);
+      if (a == "--gui")
+        gui = true;
+      else if (f.empty ())
+        f = a;
+    }
+
+    if (gui)
+    {
+      if (!f.empty ())
+      {
+        mine::window_editor_app app (f);
+        app.run ();
+      }
+      else
+      {
+        mine::window_editor_app app;
+        app.run ();
+      }
     }
     else
     {
-      mine::terminal_editor_app app;
-      app.run ();
+      if (!f.empty ())
+      {
+        mine::terminal_editor_app app (f);
+        app.run ();
+      }
+      else
+      {
+        mine::terminal_editor_app app;
+        app.run ();
+      }
     }
 
     return 0;
   }
-  catch (const exception& e)
+  catch (const std::exception& e)
   {
-    cerr << "Abandon all hope, ye who enter here: " << e.what () << endl;
+    std::cerr << "Abandon all hope, ye who enter here: " << e.what () << std::endl;
     return 1;
   }
 }
