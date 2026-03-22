@@ -67,10 +67,10 @@ namespace mine
     build_screen (const editor_state& state) const;
 
     void
-    draw_buffer (terminal_screen& screen, const editor_state& state) const;
+    draw_buffer (terminal_screen_builder& screen, const editor_state& state) const;
 
     void
-    draw_status_line (terminal_screen& screen, const editor_state& state) const;
+    draw_status_line (terminal_screen_builder& screen, const editor_state& state) const;
 
     // ANSI Output helpers.
     //

@@ -5,6 +5,10 @@
 #include <compare>
 #include <algorithm>
 
+#include <immer/vector.hpp>
+#include <immer/vector_transient.hpp>
+#include <immer/algorithm.hpp>
+
 #include <mine/mine-types.hxx>
 #include <mine/mine-assert.hxx>
 
@@ -64,12 +68,20 @@ namespace mine
   class terminal_screen
   {
   public:
+    using cells_type = immer::vector<terminal_cell>;
+
     terminal_screen () = default;
 
     explicit
     terminal_screen (screen_size s)
       : size_ (s),
         cells_ (s.rows * s.cols, terminal_cell {})
+    {
+    }
+
+    terminal_screen (screen_size s, cells_type c)
+      : size_ (s),
+        cells_ (std::move (c))
     {
     }
 
@@ -82,13 +94,6 @@ namespace mine
     // Access
     //
 
-    terminal_cell&
-    at (screen_position p)
-    {
-      MINE_PRECONDITION (size_.contains (p));
-      return cells_[p.row * size_.cols + p.col];
-    }
-
     const terminal_cell&
     at (screen_position p) const
     {
@@ -96,13 +101,83 @@ namespace mine
       return cells_[p.row * size_.cols + p.col];
     }
 
-    // Modification
+    const cells_type&
+    cells () const noexcept
+    {
+      return cells_;
+    }
+
+    // Bulk Ops
     //
+
+    void
+    clear ()
+    {
+      cells_ = cells_type(size_.rows * size_.cols, terminal_cell {});
+    }
+
+    // Resize the canvas, preserving content.
+    //
+    // When the terminal window is resized, we want to try and keep the
+    // current content "anchored" at top-left, rather than clearing everything.
+    //
+    // We compute the intersection of the old rect and the new rect. Content
+    // inside the intersection is copied over; content outside is dropped; new
+    // space is zero-initialized.
+    //
+    terminal_screen
+    resize (screen_size new_s) const
+    {
+      auto t = immer::vector<terminal_cell>(new_s.rows * new_s.cols, terminal_cell{}).transient();
+
+      std::uint16_t h (std::min (size_.rows, new_s.rows));
+      std::uint16_t w (std::min (size_.cols, new_s.cols));
+
+      for (std::uint16_t y (0); y < h; ++y)
+      {
+        for (std::uint16_t x (0); x < w; ++x)
+        {
+          screen_position p (y, x);
+          t.set (y * new_s.cols + x, at (p));
+        }
+      }
+
+      return terminal_screen (new_s, t.persistent ());
+    }
+
+    bool operator== (const terminal_screen&) const = default;
+
+  private:
+    screen_size size_ {24, 80};
+    cells_type  cells_;
+  };
+
+  // A transient builder for rapid frame construction.
+  //
+  // Immutable data structures are expensive if we recreate the whole tree for
+  // every single cell we write to the screen during the render pass. This
+  // uses `immer::vector_transient` to allow O(1) mutations until we are
+  // ready to snapshot the final frame via `finish()`.
+  //
+  class terminal_screen_builder
+  {
+  public:
+    terminal_screen_builder (screen_size s)
+      : size_ (s),
+        cells_ (immer::vector<terminal_cell>(s.rows * s.cols, terminal_cell{}).transient())
+    {
+    }
+
+    terminal_screen_builder (const terminal_screen& s)
+      : size_ (s.size ()),
+        cells_ (s.cells ().transient ())
+    {
+    }
 
     void
     set_cell (screen_position p, const terminal_cell &c)
     {
-      at (p) = std::move (c);
+      cells_.set (p.row * size_.cols + p.col, c);
     }
 
     // Convenience helper for writing simple ASCII.
@@ -110,7 +185,7 @@ namespace mine
     void
     set_char (screen_position p, char c, cell_attributes a = {})
     {
-      at (p) = terminal_cell {std::string (1, c), a, false};
+      set_cell (p, terminal_cell {std::string (1, c), a, false});
     }
 
     // Write a full grapheme cluster.
@@ -129,22 +204,13 @@ namespace mine
                   cell_attributes a = {},
                   bool wide = false)
     {
-      at (p) = terminal_cell {std::string (s), a, false};
+      set_cell (p, terminal_cell {std::string (s), a, false});
 
       if (wide && p.col + 1 < size_.cols)
       {
         screen_position next (p.row, p.col + 1);
-        at (next) = terminal_cell {"", a, true};
+        set_cell (next, terminal_cell {"", a, true});
       }
-    }
-
-    // Bulk Ops
-    //
-
-    void
-    clear ()
-    {
-      std::ranges::fill (cells_, terminal_cell {});
     }
 
     void
@@ -152,47 +218,27 @@ namespace mine
     {
       MINE_PRECONDITION (row < size_.rows);
 
-      // We can just iterate the segment of the flat vector corresponding to
-      // this row.
-      //
-      auto b (cells_.begin () + (row * size_.cols));
-      std::fill_n (b, size_.cols, terminal_cell {});
-    }
-
-    // Resize the canvas, preserving content.
-    //
-    // When the terminal window is resized, we want to try and keep the
-    // current content "anchored" at top-left, rather than clearing everything.
-    //
-    // We compute the intersection of the old rect and the new rect. Content
-    // inside the intersection is copied over; content outside is dropped; new
-    // space is zero-initialized.
-    //
-    terminal_screen
-    resize (screen_size new_s) const
-    {
-      terminal_screen r (new_s);
-
-      std::uint16_t h (std::min (size_.rows, new_s.rows));
-      std::uint16_t w (std::min (size_.cols, new_s.cols));
-
-      for (std::uint16_t y (0); y < h; ++y)
+      for (std::uint16_t c = 0; c < size_.cols; ++c)
       {
-        for (std::uint16_t x (0); x < w; ++x)
-        {
-          screen_position p (y, x);
-          r.set_cell (p, at (p));
-        }
+        set_cell (screen_position (row, c), terminal_cell {});
       }
-
-      return r;
     }
 
-    bool operator== (const terminal_screen&) const = default;
+    terminal_screen
+    finish ()
+    {
+      return terminal_screen (size_, cells_.persistent ());
+    }
+
+    screen_size
+    size () const noexcept
+    {
+      return size_;
+    }
 
   private:
-    screen_size size_ {24, 80};
-    std::vector<terminal_cell> cells_;
+    screen_size size_;
+    immer::vector_transient<terminal_cell> cells_;
   };
 
   // Diffing
@@ -250,6 +296,9 @@ namespace mine
     // Sanity check the bounds.
     //
     std::uint16_t row_end (std::min<uint16_t> (row_start + row_count, sz.rows));
+
+    if (old_s.cells() == new_s.cells())
+        return d;
 
     // Linear scan.
     //

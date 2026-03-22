@@ -1,9 +1,10 @@
 #pragma once
 
-#include <vector>
 #include <string>
 #include <cstddef>
 #include <string_view>
+
+#include <immer/vector.hpp>
 
 namespace mine
 {
@@ -42,8 +43,8 @@ namespace mine
   //
   struct grapheme_segmentation
   {
-    std::vector<grapheme_cluster> clusters;
-    std::size_t                   total_bytes = 0;
+    immer::vector<grapheme_cluster> clusters;
+    std::size_t                     total_bytes = 0;
 
     // Find the cluster that physically contains the given byte offset.
     //

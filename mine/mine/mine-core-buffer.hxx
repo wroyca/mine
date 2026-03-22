@@ -8,6 +8,7 @@
 
 #include <immer/vector.hpp>
 #include <immer/flex_vector.hpp>
+#include <immer/algorithm.hpp>
 
 #include <mine/mine-types.hxx>
 #include <mine/mine-assert.hxx>
@@ -42,9 +43,15 @@ namespace mine
     // update it behind the scenes. It's logically part of the line's "value",
     // but physically it's just a derived cache.
     //
+    // We also cache the assembled string because `immer::flex_vector` does not
+    // guarantee continuous chunks in memory, and interacting with C-style
+    // APIs (like ICU) requires a contiguous block.
+    //
     struct line
     {
       immer::flex_vector<char> data;
+      mutable std::string      str_cache;
+      mutable bool             str_valid {false};
       mutable grapheme_index   idx;
 
       line () = default;
@@ -61,7 +68,9 @@ namespace mine
 
       explicit
       line (std::string_view s)
-          : data (s.begin (), s.end ())
+          : data (s.begin (), s.end ()),
+            str_cache (s),
+            str_valid (true)
       {
         update_idx ();
       }
@@ -82,13 +91,32 @@ namespace mine
         if (this != &x)
         {
           data = x.data;
+          str_valid = false;
           update_idx ();
         }
         return *this;
       }
 
-      line (line&&) noexcept = default;
-      line& operator= (line&&) noexcept = default;
+      line (line&& x) noexcept
+        : data (std::move (x.data)),
+          str_cache (std::move (x.str_cache)),
+          str_valid (x.str_valid),
+          idx (std::move (x.idx))
+      {
+      }
+
+      line&
+      operator = (line&& x) noexcept
+      {
+        if (this != &x)
+        {
+          data = std::move (x.data);
+          str_cache = std::move (x.str_cache);
+          str_valid = x.str_valid;
+          idx = std::move (x.idx);
+        }
+        return *this;
+      }
 
       bool
       operator== (const line& x) const
@@ -103,9 +131,18 @@ namespace mine
       std::string_view
       view () const
       {
-        return data.empty ()
-          ? std::string_view {}
-          : std::string_view (&data[0], data.size ());
+        if (!str_valid)
+        {
+          str_cache.clear ();
+          str_cache.reserve (data.size ());
+          immer::for_each_chunk (data,
+                                 [&] (auto first, auto last)
+          {
+            str_cache.append (first, last);
+          });
+          str_valid = true;
+        }
+        return str_cache;
       }
 
       void
@@ -407,15 +444,16 @@ namespace mine
 
       // Qestion: How many lines do we need to kill?
       //
-      // Answer: It's the diff between end and start.
-      // But also, the end line has its suffix absorbed into the start line.
+      // Answer: It's the diff between end and start. But also, the end line has
+      // its suffix absorbed into the start line.
       //
-      r = r.erase (b.line.value + 1, e.line.value + 1);
+      auto r_pre (r.take (b.line.value + 1));
+      auto r_suf (r.drop (e.line.value + 1));
 
-      return text_buffer (std::move (r));
+      return text_buffer (r_pre + r_suf);
     }
 
-std::string
+    std::string
     get_range (cursor_position b, cursor_position e) const
     {
       MINE_PRECONDITION (b.line.value <= e.line.value);
@@ -452,13 +490,16 @@ std::string
       r.push_back ('\n');
 
       // Append any intermediate lines entirely. Notice we include the newline
-      // characters to reconstruct the exact spanned block.
+      // characters to reconstruct the exact spanned block. We use for_each
+      // over a fast structurally shared slice.
       //
-      for (std::size_t i (b.line.value + 1); i < e.line.value; ++i)
+      immer::for_each (
+        lines_.drop (b.line.value + 1).take (e.line.value - b.line.value - 1),
+        [&] (const line& l)
       {
-        r.append (lines_[i].view ());
+        r.append (l.view ());
         r.push_back ('\n');
-      }
+      });
 
       // Finally, process the ending line up to the column offset. We don't
       // append a newline here since the range terminates mid-line.
@@ -569,20 +610,22 @@ std::string
   buffer_to_string (const text_buffer& b)
   {
     std::string r;
+    bool first (true);
 
     // Iterate over all lines and append them to the result, injecting the
     // newlines back in that we stripped during parsing.
     //
-    for (std::size_t i (0); i < b.line_count (); ++i)
+    immer::for_each (b.lines (),
+                     [&] (const text_buffer::line& l)
     {
-      const auto& l (b.line_at (line_number (i)));
-      auto v (l.view ());
+      if (!first)
+        r.push_back ('\n');
+
+      first = false;
+      auto v = l.view ();
 
       r.append (v.begin (), v.end ());
-
-      if (i + 1 < b.line_count ())
-        r.push_back ('\n');
-    }
+    });
 
     return r;
   }

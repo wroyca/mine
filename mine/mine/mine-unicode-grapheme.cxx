@@ -8,7 +8,8 @@
 #include <cassert>
 #include <cstddef>
 #include <string_view>
-#include <vector>
+
+#include <immer/vector_transient.hpp>
 
 using namespace std;
 
@@ -118,6 +119,8 @@ namespace mine
 
     size_t idx (0);
 
+    auto clusters_t = immer::vector_transient<grapheme_cluster>();
+
     // Iterate through the boundaries found by ICU.
     //
     while (end != icu::BreakIterator::DONE)
@@ -138,11 +141,13 @@ namespace mine
       c.byte_length = b_end - b_start;
       c.index       = idx++;
 
-      res.clusters.push_back (c);
+      clusters_t.push_back (c);
 
       start = end;
       end = iter.next ();
     }
+
+    res.clusters = clusters_t.persistent();
 
     return res;
   }

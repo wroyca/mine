@@ -87,12 +87,13 @@ namespace mine
     // Update the status line.
     //
     // We clone the current screen to apply the status line updates. While
-    // copying the buffer might seem heavy, it allows us to reuse the
-    // standard diffing logic for the status row and avoids custom "draw
-    // immediately" logic.
+    // copying the buffer might seem heavy, it allows us to reuse the standard
+    // diffing logic for the status row and avoids custom "draw immediately"
+    // logic.
     //
-    terminal_screen next (current_screen_);
-    draw_status_line (next, s);
+    terminal_screen_builder next_builder (current_screen_);
+    draw_status_line (next_builder, s);
+    terminal_screen next = next_builder.finish ();
 
     // Diff only the last row.
     //
@@ -185,16 +186,16 @@ namespace mine
   terminal_screen terminal_renderer::
   build_screen (const editor_state& s) const
   {
-    terminal_screen scr (current_screen_.size ());
+    terminal_screen_builder scr (current_screen_.size ());
 
     draw_buffer (scr, s);
     draw_status_line (scr, s);
 
-    return scr;
+    return scr.finish ();
   }
 
   void terminal_renderer::
-  draw_buffer (terminal_screen& ts, const editor_state& s) const
+  draw_buffer (terminal_screen_builder& ts, const editor_state& s) const
   {
     const auto& b (s.buffer ());
     const auto& v (s.view ());
@@ -338,7 +339,7 @@ namespace mine
   }
 
   void terminal_renderer::
-  draw_status_line (terminal_screen& scr, const editor_state& s) const
+  draw_status_line (terminal_screen_builder& scr, const editor_state& s) const
   {
     auto sz (scr.size ());
     if (sz.rows == 0)
@@ -486,7 +487,7 @@ namespace mine
   void terminal_renderer::
   move_cursor (screen_position p)
   {
-    // ANSI CUP: ESC [ <row> ; <col> H (1-based)
+    // ANSI CUP: ESC[ <row> ; <col> H (1-based)
     //
     write ("\x1b[" +
            to_string (p.row + 1) + ';' +
