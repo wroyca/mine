@@ -118,8 +118,8 @@ namespace mine
       //
       if (p_.column.value > 0)
       {
-        return cursor (cursor_position (p_.line,
-                                        column_number (p_.column.value - 1)));
+        return move_to (cursor_position (p_.line,
+                                         column_number (p_.column.value - 1)));
       }
 
       // We are at column 0. Try to wrap to the previous line.
@@ -132,7 +132,7 @@ namespace mine
         //
         std::size_t n (b.line_length (l));
 
-        return cursor (cursor_position (l, column_number (n)));
+        return move_to (cursor_position (l, column_number (n)));
       }
 
       // We are at (0,0). Nowhere to go.
@@ -154,16 +154,16 @@ namespace mine
       //
       if (p_.column.value < n)
       {
-        return cursor (cursor_position (p_.line,
-                                        column_number (p_.column.value + 1)));
+        return move_to (cursor_position (p_.line,
+                                         column_number (p_.column.value + 1)));
       }
 
       // We are at the end. Try to wrap to the start of the next line.
       //
       if (p_.line.value + 1 < b.line_count ())
       {
-        return cursor (cursor_position (line_number (p_.line.value + 1),
-                                        column_number (0)));
+        return move_to (cursor_position (line_number (p_.line.value + 1),
+                                         column_number (0)));
       }
 
       // End of buffer.
@@ -191,7 +191,7 @@ namespace mine
         //
         column_number c (std::min (p_.column.value, n));
 
-        return cursor (cursor_position (l, c));
+        return move_to (cursor_position (l, c));
       }
 
       return *this;
@@ -211,7 +211,7 @@ namespace mine
 
         column_number c (std::min (p_.column.value, n));
 
-        return cursor (cursor_position (l, c));
+        return move_to (cursor_position (l, c));
       }
 
       return *this;
@@ -223,20 +223,20 @@ namespace mine
     cursor
     move_line_start () const noexcept
     {
-      return cursor (cursor_position (p_.line, column_number (0)));
+      return move_to (cursor_position (p_.line, column_number (0)));
     }
 
     cursor
     move_line_end (const text_buffer& b) const noexcept
     {
       std::size_t n (b.line_length (p_.line));
-      return cursor (cursor_position (p_.line, column_number (n)));
+      return move_to (cursor_position (p_.line, column_number (n)));
     }
 
     cursor
     move_buffer_start () const noexcept
     {
-      return cursor (cursor_position (line_number (0), column_number (0)));
+      return move_to (cursor_position (line_number (0), column_number (0)));
     }
 
     cursor
@@ -248,7 +248,7 @@ namespace mine
       line_number l (b.line_count () - 1);
       std::size_t n (b.line_length (l));
 
-      return cursor (cursor_position (l, column_number (n)));
+      return move_to (cursor_position (l, column_number (n)));
     }
 
     // Validation.

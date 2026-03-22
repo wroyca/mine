@@ -45,8 +45,9 @@ namespace mine
   {
   public:
     explicit
-    move_cursor_command (move_direction d)
-      : d_ (d)
+    move_cursor_command (move_direction d, bool select = false)
+      : d_ (d),
+        select_ (select)
     {
     }
 
@@ -81,16 +82,31 @@ namespace mine
       //
       auto nc (c);
 
+      if (select_)
+      {
+        // If the user wants to select text but doesn't have an anchor yet,
+        // drop the mark at the pre-move position.
+        //
+        if (!nc.has_mark ())
+          nc.set_mark ();
+      }
+      else
+      {
+        // Regular unshifted movement always clears the active selection.
+        //
+        nc.clear_mark ();
+      }
+
       switch (d_)
       {
-        case move_direction::up:           nc = c.move_up (b);           break;
-        case move_direction::down:         nc = c.move_down (b);         break;
-        case move_direction::left:         nc = c.move_left (b);         break;
-        case move_direction::right:        nc = c.move_right (b);        break;
-        case move_direction::line_start:   nc = c.move_line_start ();    break;
-        case move_direction::line_end:     nc = c.move_line_end (b);     break;
-        case move_direction::buffer_start: nc = c.move_buffer_start ();  break;
-        case move_direction::buffer_end:   nc = c.move_buffer_end (b);   break;
+        case move_direction::up:           nc = nc.move_up (b);           break;
+        case move_direction::down:         nc = nc.move_down (b);         break;
+        case move_direction::left:         nc = nc.move_left (b);         break;
+        case move_direction::right:        nc = nc.move_right (b);        break;
+        case move_direction::line_start:   nc = nc.move_line_start ();    break;
+        case move_direction::line_end:     nc = nc.move_line_end (b);     break;
+        case move_direction::buffer_start: nc = nc.move_buffer_start ();  break;
+        case move_direction::buffer_end:   nc = nc.move_buffer_end (b);   break;
         default: break; // Should be unreachable due to scroll check above.
       }
 
@@ -114,5 +130,6 @@ namespace mine
 
   private:
     move_direction d_;
+    bool select_;
   };
 }

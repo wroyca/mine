@@ -44,22 +44,24 @@ namespace mine
       //
       else if constexpr (is_same_v<type, special_key_event>)
       {
+        bool shift (has_modifier (x.modifiers, key_modifier::shift));
+
         switch (x.key)
         {
           // Navigation.
           //
-          case special_key::up:    return make_unique<move_cursor_command> (move_direction::up);
-          case special_key::down:  return make_unique<move_cursor_command> (move_direction::down);
-          case special_key::left:  return make_unique<move_cursor_command> (move_direction::left);
-          case special_key::right: return make_unique<move_cursor_command> (move_direction::right);
+          case special_key::up:    return make_unique<move_cursor_command> (move_direction::up, shift);
+          case special_key::down:  return make_unique<move_cursor_command> (move_direction::down, shift);
+          case special_key::left:  return make_unique<move_cursor_command> (move_direction::left, shift);
+          case special_key::right: return make_unique<move_cursor_command> (move_direction::right, shift);
 
           // For Home/End we currently map to line start/end.
           //
           // @@: At some point we should differentiate between visual line start
           // (ignoring whitespace) and absolute line start.
           //
-          case special_key::home: return make_unique<move_cursor_command> (move_direction::line_start);
-          case special_key::end:  return make_unique<move_cursor_command> (move_direction::line_end);
+          case special_key::home: return make_unique<move_cursor_command> (move_direction::line_start, shift);
+          case special_key::end:  return make_unique<move_cursor_command> (move_direction::line_end, shift);
 
           // Editing.
           //
