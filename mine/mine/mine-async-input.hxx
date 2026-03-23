@@ -1,12 +1,13 @@
 #pragma once
 
 #include <array>
-#include <utility>
 #include <functional>
+#include <iostream>
+#include <utility>
 
-#include <boost/asio/read.hpp>
-#include <boost/asio/post.hpp>
-#include <boost/asio/posix/stream_descriptor.hpp>
+#include <boost/asio.hpp>
+
+#include <boost/system/system_error.hpp>
 
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-terminal-input.hxx>
@@ -24,37 +25,30 @@ namespace mine
   class async_input
   {
   public:
-    using event_callback = std::function<void (input_event)>;
+    using event_callback = std::move_only_function<void (input_event)>;
 
-    async_input (async_loop& l, event_callback c)
-      : stream_ (l.context ()),
-        parser_ (),
-        callback_ (std::move (c))
+    explicit
+    async_input (async_loop& l, event_callback e)
+      : s_ (l.context ()),
+        e_ (std::move (e)),
+        b_ ()
     {
-      // We are attaching to STDIN_FILENO since we've already put the terminal
-      // into raw mode.
-      //
-      // Note that assign() can fail if the descriptor is invalid, though for
-      // stdin that would be quite catastrophic. We'll check ec before trying to
-      // set options.
-      //
-      boost::system::error_code ec;
-      ec = stream_.assign (STDIN_FILENO, ec);
-
-      if (!ec)
-      {
-        // Set non-blocking mode. If we don't do this, async_read_some might
-        // behave surprisingly on some platforms, though Asio usually handles
-        // it. Better safe.
-        //
-        ec = stream_.non_blocking (true, ec);
-      }
+      s_.assign (STDIN_FILENO);
+      s_.non_blocking (true);
     }
 
-    // We absolutely must detach from the descriptor. If we let the stream_
-    // destructor run while it thinks it's open, it will close(0), which is rude
-    // to the rest of the process.
-    //
+    async_input (const async_input&)
+      = delete ("async_input captures 'this' and cannot be copied");
+
+    async_input (async_input&&)
+      = delete ("async_input captures 'this' and cannot be moved");
+
+    async_input& operator= (const async_input&)
+      = delete ("async_input captures 'this' and cannot be copied");
+
+    async_input& operator= (async_input&&)
+      = delete ("async_input captures 'this' and cannot be moved");
+
     ~async_input ()
     {
       stop ();
@@ -63,93 +57,100 @@ namespace mine
     void
     start ()
     {
-      if (stream_.is_open ())
-        read ();
+      if (s_.is_open ())
+        boost::asio::co_spawn (s_.get_executor (),
+                               [this] { return read (); },
+                               boost::asio::detached);
     }
 
-    // Stop reading and detach from the file descriptor.
-    //
     void
-    stop ()
+    stop () noexcept
     {
-      if (stream_.is_open ())
+      if (s_.is_open ())
       {
-        // Cancel any pending async operations first so the handler runs with
-        // operation_aborted.
-        //
-        boost::system::error_code ec;
-        ec = stream_.cancel (ec);
+        try
+        {
+          s_.cancel ();
+        }
+        catch (const boost::system::system_error& ex)
+        {
+          std::cerr << "error cancelling input stream: " << ex.what () << '\n';
+        }
 
         // Release ownership so the destructor doesn't close the fd.
         //
-        stream_.release ();
+        s_.release ();
       }
     }
 
   private:
-    void
+    boost::asio::awaitable<void>
     read ()
     {
-      // We use a 4KB buffer (standard page size).
-      //
-      // While manual input is slow, a user might paste a massive block of text.
-      // If we use a tiny buffer (like 256 bytes), we'd trigger a storm of
-      // system calls and read handlers. A larger buffer lets us ingest the
-      // whole paste in one go and just loop over the parser.
-      //
-      stream_.async_read_some (
-        boost::asio::buffer (buf_),
-        [this] (const boost::system::error_code& ec, std::size_t n)
+      for (;;)
+      {
+        try
         {
-          // If we were stopped explicitly, we'll get operation_aborted. Don't
-          // restart the read loop in that case.
-          //
-          if (ec == boost::asio::error::operation_aborted)
-            return;
+          std::size_t const n (
+            co_await s_.async_read_some (boost::asio::buffer (b_),
+                                         boost::asio::use_awaitable));
 
-          if (!ec && n > 0)
+          if (n > 0)
           {
-            // We got some data. Parse it and fire events.
-            //
-            // Note that we post the callback to the executor instead of calling
-            // it synchronously.
-            //
-            // The issue is "sticky input": if the OS buffers multiple
-            // keypresses (e.g., arrow down held), the parser will emit multiple
-            // events in this single loop iteration. If we ran them
-            // synchronously, the application logic would update state multiple
-            // times (e.g., jumping 2 lines) before returning control to the
-            // main loop to render.
-            //
-            parser_.parse (buf_.data (), n, [this] (input_event e)
+            p_.parse (b_.data (),
+                      n,
+                      [this] (input_event e)
             {
-              boost::asio::post (stream_.get_executor (),
-                                 [this, e = std::move (e)] () mutable
+              // We still need to post the callback to the executor.
+              //
+              // The parser can emit multiple events in one go (sticky input).
+              // If we don't bounce through the executor, we end up running
+              // application logic synchronously in a tight loop before getting
+              // back to the render cycle.
+              //
+              // Also note that we mark the lambda mutable because we move 'ev'
+              // out of the capture block when invoking the callback, which
+              // alters the lambda's internal capture state. If it wasn't
+              // mutable, the captured 'ev' would be implicitly const.
+              //
+              boost::asio::post (s_.get_executor (),
+                                 [this, ev (std::move (e))] () mutable
               {
-                callback_ (std::move (e));
+                e_ (std::move (ev));
               });
             });
+          }
+        }
+        catch (const boost::system::system_error& e)
+        {
+          // Handle EOF and cancellation.
+          //
+          // EOF on stdin in raw mode is tricky. It usually means the pty
+          // vanished (but how?). For now, let's just keep spinning.
+          //
+          if (e.code () == boost::asio::error::eof)
+            continue;
 
-            read ();
-          }
-          else if (ec == boost::asio::error::eof)
-          {
-            // EOF on stdin is weird in raw mode. It usually means the pty went
-            // away or the user hit ^D in cooked mode. For now, let's try to
-            // keep reading, but we might want to back off if this spins.
-            //
-            read ();
-          }
-          // else: genuine error, stop reading.
-        });
+          // If we were explicitly cancelled (e.g., via stop ()), then bail out
+          // of the loop.
+          //
+          if (e.code () == boost::asio::error::operation_aborted)
+            break;
+
+          std::cerr << "error reading input stream: " << e.what () << '\n';
+          break;
+        }
+      }
     }
 
   private:
-    boost::asio::posix::stream_descriptor stream_;
-    terminal_input_parser parser_;
-    event_callback callback_;
+    static constexpr std::size_t b_n = 4096;
 
-    std::array<char, 4096> buf_;
+    boost::asio::posix::stream_descriptor s_;
+    terminal_input_parser p_;
+    event_callback e_;
+
+    std::array<char, b_n> b_;
   };
 
   using async_input_handler = async_input;
