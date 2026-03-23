@@ -30,7 +30,8 @@ You'll also need a working GCC compiler. Use GCC if you're compiling on Linux, o
 #
 bpkg create -d mine -@mingw32       ^
   config.cxx=x86_64-w64-mingw32-g++ ^
-  cc
+  cc                                ^
+  config.install.root=C:/mine/
   
 cd mine
 
@@ -64,8 +65,10 @@ bpkg install mine
 ```bash
 # Create the build configuration:
 #
-bpkg create -d mine @gcc \
-  cc
+bpkg create -d mine @gcc    \
+  cc                        \
+  config.install.root=/usr  \
+  config.install.sudo=sudo
 
 cd mine
 
@@ -167,3 +170,4 @@ Contributions are welcome! If you are interested in helping expand Mine's editin
 ## License
 
 Mine is released under the [GNU General Public License v3](LICENSE.md).
+
