@@ -6,6 +6,13 @@
 #include <utility>
 
 #include <boost/asio.hpp>
+#if defined(_WIN32)
+#  include <boost/asio/windows/stream_handle.hpp>
+#  include <windows.h>
+#else
+#  include <boost/asio/posix/stream_descriptor.hpp>
+#  include <unistd.h>
+#endif
 
 #include <boost/system/system_error.hpp>
 
@@ -33,8 +40,12 @@ namespace mine
         e_ (std::move (e)),
         b_ ()
     {
+#if defined(_WIN32)
+      s_.assign (::GetStdHandle (STD_INPUT_HANDLE));
+#else
       s_.assign (STDIN_FILENO);
       s_.non_blocking (true);
+#endif
     }
 
     async_input (const async_input&)
@@ -128,7 +139,8 @@ namespace mine
           // EOF on stdin in raw mode is tricky. It usually means the pty
           // vanished (but how?). For now, let's just keep spinning.
           //
-          if (e.code () == boost::asio::error::eof)
+          if (e.code () == boost::asio::error::eof ||
+              e.code () == boost::asio::error::broken_pipe)
             continue;
 
           // If we were explicitly cancelled (e.g., via stop ()), then bail out
@@ -146,7 +158,12 @@ namespace mine
   private:
     static constexpr std::size_t b_n = 4096;
 
+#ifdef _WIN32
+    boost::asio::windows::stream_handle s_;
+#else
     boost::asio::posix::stream_descriptor s_;
+#endif
+
     terminal_input_parser p_;
     event_callback e_;
 

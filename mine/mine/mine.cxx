@@ -5,8 +5,10 @@
 #include <thread>
 #include <memory>
 #include <string>
+#include <cstring> // For memcmp
 
 #include <boost/asio/signal_set.hpp>
+#include <boost/asio/steady_timer.hpp> // For Windows fallback
 
 // #include <cpptrace/cpptrace.hpp>
 
@@ -186,8 +188,13 @@ namespace mine
       // Shutdown sequence.
       //
       input_->stop ();
+#ifndef _WIN32
       if (winch_)
         winch_->cancel ();
+#else
+      if (winch_timer_)
+        winch_timer_->cancel ();
+#endif
     }
 
   private:
@@ -245,9 +252,17 @@ namespace mine
       // We use `signal_set` for SIGWINCH because it integrates cleanly with
       // the ASIO reactor, unlike the raw C handlers.
       //
+#ifndef _WIN32
       winch_ = make_unique<boost::asio::signal_set> (loop_.context (),
                                                      SIGWINCH);
       handle_resize ();
+#else
+      // Windows doesn't use SIGWINCH. We poll periodically instead.
+      //
+      winch_timer_ = make_unique<boost::asio::steady_timer> (loop_.context ());
+      last_term_sz_ = get_terminal_size ();
+      handle_resize ();
+#endif
 
       // Load Initial File.
       //
@@ -258,6 +273,7 @@ namespace mine
     void
     handle_resize ()
     {
+#ifndef _WIN32
       winch_->async_wait ([this] (const boost::system::error_code& ec, int)
       {
         if (!ec)
@@ -283,6 +299,42 @@ namespace mine
           }
         }
       });
+#else
+      if (!winch_timer_)
+        return;
+
+      winch_timer_->expires_after (std::chrono::milliseconds (250));
+      winch_timer_->async_wait ([this] (const boost::system::error_code& e)
+      {
+        if (!e)
+        {
+          // Re-arm immediately to catch any subsequent signals in the flurry.
+          //
+          handle_resize ();
+
+          auto s (get_terminal_size ());
+          if (s)
+          {
+            // Figure out if the dimensions actually changed.
+            //
+            bool c (!last_term_sz_);
+
+            if (c)
+            {
+              last_term_sz_ = s;
+
+              // Handle the resize dance.
+              //
+              cout << "\x1b[2J\x1b[H" << flush;
+
+              core_.resize (*s);
+              ren_->resize (*s);
+              ren_->force_redraw (core_.current ());
+            }
+          }
+        }
+      });
+#endif
     }
 
     void
@@ -307,7 +359,13 @@ namespace mine
 
     unique_ptr<terminal_renderer>       ren_;
     unique_ptr<async_input_handler>     input_;
+
+#ifndef _WIN32
     unique_ptr<boost::asio::signal_set> winch_;
+#else
+    unique_ptr<boost::asio::steady_timer> winch_timer_;
+    decltype(get_terminal_size()) last_term_sz_;
+#endif
 
     string file_;
     string last_msg_;
