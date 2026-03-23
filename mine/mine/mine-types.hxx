@@ -232,4 +232,80 @@ namespace mine
       return timestamp (nanoseconds - t.nanoseconds);
     }
   };
+
+  // Pixel measurements.
+  //
+  using pixel_t       = float;
+  using pixel_offset  = std::int32_t;
+  using texture_id    = std::uint32_t;
+  using shader_id     = std::uint32_t;
+  using buffer_id     = std::uint32_t;
+
+  // Handle types (opaque identifiers).
+  //
+  struct handle
+  {
+    std::uint32_t id = 0;
+
+    bool valid () const { return id != 0; }
+    explicit operator bool () const { return valid (); }
+
+    bool operator== (const handle&) const = default;
+    bool operator!= (const handle&) const = default;
+  };
+
+  // Specialized handles.
+  //
+  struct texture_handle : handle {};
+  struct shader_handle  : handle {};
+  struct buffer_handle  : handle {};
+  struct atlas_handle   : handle {};
+
+  // Color (RGBA, normalized floats).
+  //
+  struct color
+  {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    float a = 1.0f;
+
+    static color white ()      { return {1.0f, 1.0f, 1.0f, 1.0f}; }
+    static color black ()      { return {0.0f, 0.0f, 0.0f, 1.0f}; }
+    static color transparent() { return {0.0f, 0.0f, 0.0f, 0.0f}; }
+
+    bool operator== (const color&) const = default;
+  };
+
+  // Rectangle (screen space).
+  //
+  struct rect
+  {
+    pixel_t x      = 0.0f;
+    pixel_t y      = 0.0f;
+    pixel_t width  = 0.0f;
+    pixel_t height = 0.0f;
+
+    [[nodiscard]] pixel_t right () const  { return x + width; }
+    [[nodiscard]] pixel_t bottom () const { return y + height; }
+
+    [[nodiscard]] bool contains (pixel_t px, pixel_t py) const
+    {
+      return px >= x && px < right () && py >= y && py < bottom ();
+    }
+
+    bool operator== (const rect&) const = default;
+  };
+
+  // UV coordinates for texture mapping.
+  //
+  struct uv_rect
+  {
+    float u0 = 0.0f;
+    float v0 = 0.0f;
+    float u1 = 1.0f;
+    float v1 = 1.0f;
+
+    bool operator== (const uv_rect&) const = default;
+  };
 }

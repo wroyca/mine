@@ -8,6 +8,7 @@ depends: * bpkg >= 0.18.0-
 depends: libboost-asio >= 1.87.0
 depends: libcpptrace
 depends: libimmer >= 0.8.1
+depends: libfreetype
 depends: libicui18n
 depends:
 \

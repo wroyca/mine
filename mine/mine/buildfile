@@ -1,9 +1,9 @@
 libs =
 import libs += libboost-asio%lib{boost_asio}
-#import libs += libcpptrace%lib{cpptrace}
 import libs += libimmer%lib{immer}
 import libs += libicui18n%lib{icui18n}
 import libs += glfw%lib{glfw}
+import libs += libfreetype%lib{freetype}
 
 exe{mine}: {hxx ixx txx cxx c h}{**} $libs
 
