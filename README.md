@@ -31,7 +31,8 @@ You'll also need a working GCC compiler. Use GCC if you're compiling on Linux, o
 bpkg create -d mine -@mingw32       ^
   config.cxx=x86_64-w64-mingw32-g++ ^
   cc                                ^
-  config.install.root=C:/mine/
+  config.bin.lib=static             ^
+  config.install.root=C:/mine/      ^
   
 cd mine
 
@@ -67,6 +68,7 @@ bpkg install mine
 #
 bpkg create -d mine @gcc    \
   cc                        \
+  config.bin.lib=static     \
   config.install.root=/usr  \
   config.install.sudo=sudo
 
