@@ -1,18 +1,9 @@
 #pragma once
 
-#include <functional>
+#include <concepts>
 #include <optional>
-#include <utility>
 
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/dispatch.hpp>
-#include <boost/asio/executor_work_guard.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/post.hpp>
-#include <boost/asio/strand.hpp>
-#include <boost/asio/use_awaitable.hpp>
+#include <boost/asio.hpp>
 
 #include <mine/mine-assert.hxx>
 
@@ -31,7 +22,7 @@ namespace mine
   public:
     using context_type = boost::asio::io_context;
     using executor_type = context_type::executor_type;
-    using strand = boost::asio::strand<executor_type>;
+    using strand_type = boost::asio::strand<executor_type>;
 
     // We default the concurrency hint to 1.
     //
@@ -41,28 +32,32 @@ namespace mine
     // CPU cycles and latency.
     //
     explicit
-    async_loop (int concurrency_hint = 1)
-      : ctx_ (concurrency_hint),
-        // Lock the context so run() doesn't exit when the queue is empty.
-        //
-        work_ (boost::asio::make_work_guard (ctx_))
+    async_loop (const int h = 1)
+      : c_ (h),
+        w_ (boost::asio::make_work_guard (c_))
     {
     }
 
-    // We own the context, so no copying or moving.
-    //
-    async_loop (const async_loop&) = delete;
-    async_loop (async_loop&&) = delete;
-    async_loop& operator= (const async_loop&) = delete;
-    async_loop& operator= (async_loop&&) = delete;
+    async_loop (const async_loop&)
+      = delete ("async_loop owns an io_context and cannot be copied");
 
-    // Run the loop. This blocks until stop() is called and all work is
-    // finished.
+    async_loop (async_loop&&)
+      = delete ("async_loop owns an io_context and cannot be moved");
+
+    async_loop& operator = (const async_loop&)
+      = delete ("async_loop owns an io_context and cannot be copied");
+
+    async_loop& operator = (async_loop&&)
+      = delete ("async_loop owns an io_context and cannot be moved");
+
+    ~async_loop () = default;
+
+    // Block until stopped and all queued work is finished.
     //
     void
     run ()
     {
-      ctx_.run ();
+      c_.run ();
     }
 
     // Stop the loop gracefully.
@@ -71,67 +66,56 @@ namespace mine
     // new "external" work is coming. It will process any handlers already in
     // the queue (draining) and then exit run() naturally.
     //
-    // Note: We deliberately avoid ctx_.stop() here. That function causes run()
-    // to return immediately, potentially discarding pending handlers (like
-    // half-finished writes or close events), which is rarely what we want.
+    // Note that we deliberately avoid ctx_.stop() here. That function causes
+    // run() to return immediately, potentially discarding pending handlers
+    // (like half-finished writes or close events), which is rarely what we
+    // want.
     //
-    // IMPORTANT: To actually exit run(), we must also confirm no other async
-    // operations (like the terminal input reader) are keeping the loop alive.
+    // Note also that if we want to actually exit run(), we must first confirm
+    // that no other async operations (like the terminal input reader) are
+    // keeping the loop alive.
     //
     void
-    stop ()
+    stop () noexcept
     {
-      work_.reset ();
+      w_.reset ();
     }
 
-    // Accessors.
-    //
-    // We expose the raw context because almost all Boost.Asio primitives
-    // (sockets, timers) need a reference to it during construction.
+    // Return the raw context since most Boost.Asio primitives need a reference
+    // to it during initialization.
     //
     context_type&
-    context () { return ctx_; }
+    context () noexcept
+    {
+      return c_;
+    }
 
     executor_type
-    executor () { return ctx_.get_executor (); }
+    executor () noexcept
+    {
+      return c_.get_executor ();
+    }
 
-    // Utilities.
-    //
-
-    strand
+    strand_type
     make_strand ()
     {
-      return strand (ctx_.get_executor ());
+      return strand_type (c_.get_executor ());
     }
 
-    template <typename F>
     void
-    post (F&& f)
+    post (std::invocable auto&& f)
     {
-      boost::asio::post (ctx_, std::forward<F> (f));
+      boost::asio::post (c_, std::forward<decltype (f)> (f));
     }
 
-    template <typename F>
     void
-    dispatch (F&& f)
+    dispatch (std::invocable auto&& f)
     {
-      boost::asio::dispatch (ctx_, std::forward<F> (f));
+      boost::asio::dispatch (c_, std::forward<decltype (f)> (f));
     }
 
   private:
-    context_type ctx_;
-    std::optional<boost::asio::executor_work_guard<executor_type>> work_;
+    context_type c_;
+    std::optional<boost::asio::executor_work_guard<executor_type>> w_;
   };
-
-  // Coroutine conveniences.
-  //
-  // We pull these into our namespace so we don't have to type boost::asio::
-  // every time we write a coroutine.
-  //
-  template <typename T>
-  using awaitable = boost::asio::awaitable<T>;
-
-  using boost::asio::use_awaitable;
-  using boost::asio::co_spawn;
-  using boost::asio::detached;
 }
