@@ -288,30 +288,6 @@ namespace mine
     void
     handle_input (const input_event& e)
     {
-      // App-level shortcuts (Quit, Save).
-      //
-      // These bypass the editor core because they affect the lifecycle of
-      // the application itself or IO, not just buffer state.
-      //
-      if (const auto* k = get_if<text_input_event> (&e))
-      {
-        // Ctrl+Q -> Quit
-        //
-        if (k->text == "q" && has_modifier (k->modifiers, key_modifier::ctrl))
-        {
-          quit_ = true;
-          return;
-        }
-
-        // Ctrl+S -> Save
-        //
-        if (k->text == "s" && has_modifier (k->modifiers, key_modifier::ctrl))
-        {
-          core_.save ();
-          return;
-        }
-      }
-
       // Delegate everything else to the editor logic.
       //
       core_.handle_input (e);
@@ -508,27 +484,6 @@ namespace mine
     void
     handle_input (const input_event& e)
     {
-      // App-level shortcuts (Quit, Save).
-      //
-      if (const auto* k = get_if<text_input_event> (&e))
-      {
-        // Ctrl+Q -> Quit
-        //
-        if (k->text == "q" && has_modifier (k->modifiers, key_modifier::ctrl))
-        {
-          quit_ = true;
-          return;
-        }
-
-        // Ctrl+S -> Save
-        //
-        if (k->text == "s" && has_modifier (k->modifiers, key_modifier::ctrl))
-        {
-          core_.save ();
-          return;
-        }
-      }
-
       // Delegate everything else to the editor logic.
       //
       core_.handle_input (e);
