@@ -7,6 +7,7 @@
 #include <mine/mine-command-undo.hxx>
 #include <mine/mine-command-redo.hxx>
 #include <mine/mine-command-clipboard.hxx>
+#include <mine/mine-command-quit.hxx>
 
 using namespace std;
 
@@ -37,6 +38,9 @@ namespace mine
         //
         if (has_modifier (x.modifiers, key_modifier::ctrl))
         {
+           if (x.text == "q")
+            return make_unique<quit_command> ();
+
           if (x.text == "z")
             return make_unique<undo_command> ();
 

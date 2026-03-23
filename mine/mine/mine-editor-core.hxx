@@ -62,6 +62,12 @@ namespace mine
     {
       // Meta-commands that bypass standard state execution.
       //
+      if (cmd.name () == "quit")
+      {
+        quit ();
+        return;
+      }
+
       if (cmd.name () == "undo")
       {
         undo ();
@@ -169,6 +175,12 @@ namespace mine
         h_ = h_.redo ();
         notify (change_hint::content);
       }
+    }
+
+    void
+    quit ()
+    {
+      exit (0);
     }
 
     // File I/O
