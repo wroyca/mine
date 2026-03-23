@@ -3,20 +3,26 @@
 #include <cstdlib>
 #include <iostream>
 #include <thread>
+#include <memory>
+#include <string>
 
 #include <boost/asio/signal_set.hpp>
 
 // #include <cpptrace/cpptrace.hpp>
 
-#include <mine/mine-assert.hxx>
-#include <mine/mine-async-input.hxx>
-#include <mine/mine-async-loop.hxx>
 #include <mine/mine-editor-core.hxx>
 #include <mine/mine-terminal-raw.hxx>
 #include <mine/mine-terminal-render.hxx>
+#include <mine/mine-async-loop.hxx>
+#include <mine/mine-async-input.hxx>
+#include <mine/mine-assert.hxx>
+#include <mine/mine-window.hxx>
+
+// OpenGL GUI dependencies.
+//
 #include <mine/mine-window-opengl.hxx>
 #include <mine/mine-window-render.hxx>
-#include <mine/mine-window.hxx>
+#include <mine/mine-window-input.hxx>
 
 using namespace std;
 
@@ -100,7 +106,7 @@ namespace mine
     }
   }
 
-  // The Application Context
+  // The Application Context (Terminal)
   //
   class terminal_editor_app
   {
@@ -115,7 +121,7 @@ namespace mine
 
     explicit
     terminal_editor_app (string f)
-        : file_ (std::move(f))
+      : file_ (std::move(f))
     {
       g_raw = &raw_;
       init ();
@@ -329,10 +335,10 @@ namespace mine
 
     string file_;
     string last_msg_;
-    bool   quit_ = false;
+    bool   quit_ {false};
   };
 
-  // The GUI Application Context
+  // The GUI Application Context (OpenGL)
   //
   class window_editor_app
   {
@@ -340,8 +346,7 @@ namespace mine
     window_editor_app ()
       : win_ (1024, 768, "mine"),
         gl_ (),
-        quit_ (false),
-        dirty_ (true)
+        ren_ ()
     {
       init ();
     }
@@ -349,9 +354,8 @@ namespace mine
     explicit window_editor_app (string f)
       : win_ (1024, 768, "mine"),
         gl_ (),
-        file_ (std::move (f)),
-        quit_ (false),
-        dirty_ (true)
+        ren_ (),
+        file_ (std::move (f))
     {
       init ();
     }
@@ -359,6 +363,8 @@ namespace mine
     void
     run ()
     {
+      auto last (std::chrono::steady_clock::now ());
+
       // The GUI Event Loop.
       //
       // Unlike the terminal backend which blocks cleanly on STDIN using
@@ -368,6 +374,29 @@ namespace mine
       while (!win_.closing () && !quit_)
       {
         win_.update ();
+
+        auto now (std::chrono::steady_clock::now ());
+        float dt (std::chrono::duration<float> (now - last).count ());
+        last = now;
+
+        if (dt > 0.1f)
+          dt = 0.1f;
+
+        auto sz (win_.framebuffer_size ());
+
+        if (sz.first != last_w_ || sz.second != last_h_)
+        {
+          ren_.resize (sz.first, sz.second);
+
+          screen_size v_sz (static_cast<uint16_t> (sz.second / 16),
+                            static_cast<uint16_t> (sz.first / 8));
+
+          core_.resize (v_sz);
+
+          last_w_ = sz.first;
+          last_h_ = sz.second;
+          dirty_ = true;
+        }
 
         // Drain any pending asynchronous operations (file IO, etc).
         //
@@ -379,14 +408,22 @@ namespace mine
         if (loop_.context ().stopped ())
           loop_.context ().restart ();
 
-        // TODO: Actually render the OpenGL quad here.
-        //
+        ren_.update (dt);
+
+        if (ren_.is_animating ())
+          dirty_ = true;
+
         if (dirty_)
         {
-          ren_.render (core_.current ());
-          win_.swap_buffers ();
+          ren_.render (core_.current (), track_);
+          track_ = false;
 
+          win_.swap_buffers ();
           dirty_ = false;
+        }
+        else
+        {
+          std::this_thread::sleep_for (std::chrono::milliseconds (8));
         }
       }
     }
@@ -395,11 +432,19 @@ namespace mine
     void
     init ()
     {
+      cerr << "info: opengl version " << gl_.version () << "\n"
+           << "info: opengl renderer " << gl_.renderer () << "\n"
+           << "info: opengl vendor " << gl_.vendor () << endl;
+
+      if (!ren_.load_font ("/usr/share/fonts/adwaita-mono-fonts/AdwaitaMono-Regular.ttf", 28))
+      {
+        cerr << "warning: failed to load default font. text rendering disabled." << endl;
+      }
+
       // Bootstrap Core.
       //
-      // Since we lack an OpenGL font renderer right now, we just fake a
-      // standard terminal grid size so the core doesn't crash trying to
-      // resize a zero-bound view.
+      // We fake a standard terminal grid size so the core doesn't crash
+      // trying to resize a zero-bound view before the first real frame resize.
       //
       screen_size sz (24, 80);
 
@@ -416,6 +461,7 @@ namespace mine
         // Flag for redraw on the next frame.
         //
         dirty_ = true;
+        track_ = true;
       });
 
       core_.on_message ([this] (const string& m)
@@ -425,21 +471,85 @@ namespace mine
         (void) m;
       });
 
+      // Input wiring.
+      //
+      // Notice how the continuous scroll callback is cleanly separated from
+      // the variant-based input_event callback. We pump raw doubles into the
+      // renderer without polluting the discrete terminal inputs.
+      //
+      input_ = make_unique<window_input> (
+        win_.handle (),
+        [this] (const input_event& e) { handle_input (e); },
+        [this] (double x, double y)
+        {
+          ren_.scroll (static_cast<float> (x), static_cast<float> (y));
+          dirty_ = true;
+        },
+        [this] (double x, double y, mouse_state st, key_modifier mod)
+        {
+          screen_position sp (ren_.screen_to_grid (static_cast<float> (x),
+                                                   static_cast<float> (y),
+                                                   core_.current ()));
+
+          mouse_event me {sp.col, sp.row, 0, mod, st};
+          core_.handle_input (me);
+
+          track_ = true;
+          dirty_ = true;
+        }
+      );
+
       // Load Initial File.
       //
       if (!file_.empty ())
         core_.load (file_);
     }
 
-    async_loop loop_;
+    void
+    handle_input (const input_event& e)
+    {
+      // App-level shortcuts (Quit, Save).
+      //
+      if (const auto* k = get_if<text_input_event> (&e))
+      {
+        // Ctrl+Q -> Quit
+        //
+        if (k->text == "q" && has_modifier (k->modifiers, key_modifier::ctrl))
+        {
+          quit_ = true;
+          return;
+        }
+
+        // Ctrl+S -> Save
+        //
+        if (k->text == "s" && has_modifier (k->modifiers, key_modifier::ctrl))
+        {
+          core_.save ();
+          return;
+        }
+      }
+
+      // Delegate everything else to the editor logic.
+      //
+      core_.handle_input (e);
+    }
+
+    async_loop  loop_;
     editor_core core_ {loop_};
-    window win_;
-    opengl_context gl_;
+
+    window          win_;
+    opengl_context  gl_;
     window_renderer ren_;
 
+    unique_ptr<window_input> input_;
+
     string file_;
-    bool quit_;
-    bool dirty_;
+
+    int  last_w_ {0};
+    int  last_h_ {0};
+    bool quit_   {false};
+    bool dirty_  {true};
+    bool track_  {true};
   };
 }
 

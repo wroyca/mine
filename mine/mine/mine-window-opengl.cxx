@@ -13,14 +13,9 @@ namespace mine
   opengl_context::
   opengl_context ()
   {
-    // Load OpenGL function pointers via glad.
-    //
-    // We pass the GLFW proc address getter. If this fails, it usually means
-    // there is no current context bound to the thread, or the machine
-    // fundamentally lacks OpenGL support. We consider this a hard invariant
-    // violation because we cannot draw anything without it.
-    //
-    int r (gladLoadGLLoader (reinterpret_cast<GLADloadproc> (glfwGetProcAddress)));
+    int r (
+      gladLoadGLLoader (reinterpret_cast<GLADloadproc> (glfwGetProcAddress)));
+
     MINE_INVARIANT (r != 0);
   }
 

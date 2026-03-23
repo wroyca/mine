@@ -71,6 +71,14 @@ namespace mine
     bool
     closing () const;
 
+    // Access the raw GLFW handle.
+    //
+    // Required for registering external subsystems (like our input router)
+    // without polluting this class with every possible callback hook.
+    //
+    GLFWwindow*
+    handle () const { return w_; }
+
   private:
     GLFWwindow* w_ {nullptr};
   };
