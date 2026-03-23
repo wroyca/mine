@@ -5,6 +5,8 @@ import libs += libicui18n%lib{icui18n}
 import libs += glfw%lib{glfw}
 import libs += libfreetype%lib{freetype}
 
+import! [rule_hint=cxx.link] libs += lua%lib{lua}
+
 exe{mine}: {hxx ixx txx cxx c h}{**} $libs
 
 cc.poptions =+ "-I$out_root" "-I$src_root"

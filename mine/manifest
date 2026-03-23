@@ -6,10 +6,11 @@ license: GPL-3.0-or-later ; GNU General Public License v3.0 or later.
 depends: * build2 >= 0.18.0-
 depends: * bpkg >= 0.18.0-
 depends: libboost-asio >= 1.87.0
-depends: libcpptrace
+#depends: libcpptrace
 depends: libimmer >= 0.8.1
 depends: libfreetype
 depends: libicui18n
+depends: lua ^5.4.8
 depends:
 \
 glfw >= 3.4.0
