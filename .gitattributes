@@ -18,6 +18,19 @@
 #
 # *.png binary
 
+# Use `linguist-language` to specify the language for certain files.
+#
+# The idea here is to get decent GitHub syntax highlighting (in PRs, diffs,
+# etc.) working for our files. Note that build2 is obviously neither Shell
+# nor YAML, but mapping them to these languages is the closest approximation
+# we currently have to drive the highlighter.
+#
+*.build       linguist-language=Shell
+  buildfile   linguist-language=Shell
+*.buildscript linguist-language=Shell
+  manifest    linguist-language=YAML
+*.manifest    linguist-language=YAML
+
 # Use `linguist-generated` attribute to mark or unmark paths to be ignored for
 # the repository's language statistics and hidden by default in diffs.
 #
