@@ -106,6 +106,15 @@ namespace mine
     bool operator== (const special_key_event&) const = default;
   };
 
+  enum class mouse_button : uint8_t
+  {
+    left        = 0,
+    middle      = 1,
+    right       = 2,
+    scroll_up   = 64,
+    scroll_down = 65
+  };
+
   // Mouse state during the event.
   //
   enum class mouse_state : std::uint8_t
@@ -121,7 +130,7 @@ namespace mine
   {
     std::uint16_t x;
     std::uint16_t y;
-    std::uint8_t  button;
+    mouse_button  button;
     key_modifier  modifiers;
     mouse_state   state;
 

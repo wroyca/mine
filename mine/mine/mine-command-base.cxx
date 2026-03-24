@@ -1,18 +1,20 @@
 #include <mine/mine-command-base.hxx>
 
-#include <mine/mine-command-move.hxx>
-#include <mine/mine-command-insert.hxx>
+#include <mine/mine-command-clipboard.hxx>
 #include <mine/mine-command-delete.hxx>
+#include <mine/mine-command-insert.hxx>
+#include <mine/mine-command-move.hxx>
+#include <mine/mine-command-quit.hxx>
+#include <mine/mine-command-redo.hxx>
 #include <mine/mine-command-selection.hxx>
 #include <mine/mine-command-undo.hxx>
-#include <mine/mine-command-redo.hxx>
-#include <mine/mine-command-clipboard.hxx>
-#include <mine/mine-command-quit.hxx>
 
 using namespace std;
 
 namespace mine
 {
+  command::~command () = default;
+
   // Map the raw input event (which is a variant of specific event structures)
   // to an abstract command.
   //
@@ -21,10 +23,10 @@ namespace mine
   // differentiate between "nothing happened" and "command executed but did
   // nothing".
   //
-  command_ptr
+  unique_ptr<command>
   make_command (const input_event& e)
   {
-    return visit ([] (const auto& x) -> command_ptr
+    return visit ([] (const auto& x) -> unique_ptr<command>
     {
       using type = decay_t<decltype (x)>;
 
@@ -38,7 +40,7 @@ namespace mine
         //
         if (has_modifier (x.modifiers, key_modifier::ctrl))
         {
-           if (x.text == "q")
+          if (x.text == "q")
             return make_unique<quit_command> ();
 
           if (x.text == "z")
@@ -60,32 +62,37 @@ namespace mine
       //
       else if constexpr (is_same_v<type, special_key_event>)
       {
-        bool shift (has_modifier (x.modifiers, key_modifier::shift));
+        const bool s (has_modifier (x.modifiers, key_modifier::shift));
 
         switch (x.key)
         {
           // Navigation.
           //
-          case special_key::up:    return make_unique<move_cursor_command> (move_direction::up, shift);
-          case special_key::down:  return make_unique<move_cursor_command> (move_direction::down, shift);
-          case special_key::left:  return make_unique<move_cursor_command> (move_direction::left, shift);
-          case special_key::right: return make_unique<move_cursor_command> (move_direction::right, shift);
+          case special_key::up:
+            return make_unique<move_cursor_command> (move_direction::up, s);
 
-          // For Home/End we currently map to line start/end.
-          //
-          // @@: At some point we should differentiate between visual line start
-          // (ignoring whitespace) and absolute line start.
-          //
-          case special_key::home: return make_unique<move_cursor_command> (move_direction::line_start, shift);
-          case special_key::end:  return make_unique<move_cursor_command> (move_direction::line_end, shift);
+          case special_key::down:
+            return make_unique<move_cursor_command> (move_direction::down, s);
+
+          case special_key::left:
+            return make_unique<move_cursor_command> (move_direction::left, s);
+
+          case special_key::right:
+            return make_unique<move_cursor_command> (move_direction::right, s);
 
           // Editing.
           //
-          case special_key::backspace:  return make_unique<delete_backward_command> ();
-          case special_key::delete_key: return make_unique<delete_forward_command> ();
-          case special_key::enter:      return make_unique<insert_newline_command> ();
+          case special_key::backspace:
+            return make_unique<delete_backward_command> ();
 
-          default: break;
+          case special_key::delete_key:
+            return make_unique<delete_forward_command> ();
+
+          case special_key::enter:
+            return make_unique<insert_newline_command> ();
+
+          default:
+            break;
         }
       }
       // Mouse events.
@@ -104,10 +111,10 @@ namespace mine
         // @@: We should parameterize the scroll amount later, but for now, a
         // single tick moves a single unit.
         //
-        if (x.button == 64)
+        if (x.button == mouse_button::scroll_up)
           return make_unique<move_cursor_command> (move_direction::scroll_up);
 
-        if (x.button == 65)
+        if (x.button == mouse_button::scroll_down)
           return make_unique<move_cursor_command> (move_direction::scroll_down);
 
         // Handle the left mouse button for text selection.
@@ -115,24 +122,27 @@ namespace mine
         // Note that we branch on the state we captured in the SGR parser to
         // determine the phase of the selection.
         //
-        if (x.button == 0)
+        if (x.button == mouse_button::left)
         {
           switch (x.state)
           {
-          case mouse_state::press:
-            // Triggered on the initial left click down.
-            //
-            return make_unique<begin_selection_command> (x.x, x.y);
+            case mouse_state::press:
+              // Triggered on the initial left click down.
+              //
+              return make_unique<begin_selection_command> (x.x, x.y);
 
-          case mouse_state::drag:
-            // Triggered as the mouse moves while holding the left click.
-            //
-            return make_unique<update_selection_command> (x.x, x.y);
+            case mouse_state::drag:
+              // Triggered as the mouse moves while holding the left click.
+              //
+              return make_unique<update_selection_command> (x.x, x.y);
 
-          case mouse_state::release:
-            // Triggered when the left click is released.
-            //
-            return make_unique<end_selection_command> (x.x, x.y);
+            case mouse_state::release:
+              // Triggered when the left click is released.
+              //
+              return make_unique<end_selection_command> (x.x, x.y);
+
+            default:
+              break;
           }
         }
       }
