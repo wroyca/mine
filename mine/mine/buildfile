@@ -1,13 +1,20 @@
 libs =
-import libs += libboost-asio%lib{boost_asio}
-import libs += libimmer%lib{immer}
-import libs += libicui18n%lib{icui18n}
-import libs += glfw%lib{glfw}
-import libs += libfreetype%lib{freetype}
-
+import                       libs += libboost-asio%lib{boost_asio}
+import                       libs += libfreetype%lib{freetype}
+import                       libs += libicui18n%lib{icui18n}
+import                       libs += libimmer%lib{immer}
 import! [rule_hint=cxx.link] libs += lua%lib{lua}
+import                       libs += glfw%lib{glfw}
 
-exe{mine}: {hxx ixx txx cxx c h}{**} $libs
+exe{mine}: {hxx ixx txx cxx}{** -mine-version} \
+           {hxx            }{    mine-version} \
+           {h           c  }{**              } \
+           $libs
 
+# Version header generation.
+#
+hxx{mine-version}: in{mine-version} $src_root/manifest
+
+# Build options.
+#
 cc.poptions =+ "-I$out_root" "-I$src_root"
-cc.coptions =+ "-Wno-array-compare"

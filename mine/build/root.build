@@ -1,14 +1,29 @@
-cxx.internal.scope = current
-
 cxx.std = experimental
 
 using cc
+
+h{*}: extension = h
+c{*}: extension = c
 
 hxx{*}: extension = hxx
 ixx{*}: extension = ixx
 txx{*}: extension = txx
 cxx{*}: extension = cxx
 
+if ($cc.target.system == 'win32-msvc')
+  cc.poptions += "-D_AMD64_"
+
+if ($cc.target.system == 'win32-msvc')
+  cc.poptions += -D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS
+
+if ($cc.target.system == 'win32-msvc')
+  cc.coptions += /wd4251 /wd4275 /wd4800
+
 # The test target for cross-testing (running tests under Wine, etc).
 #
-test.target = $cxx.target
+test.target = $cc.target
+
+# Pre-defined semantics to distinguish between development and consumption
+# builds.
+#
+config [bool] config.mine.develop ?= false

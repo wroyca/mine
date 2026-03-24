@@ -9,8 +9,8 @@
 #
 # *.bat text eol=crlf
 
-# Use `eol=lf` for files that should have the LF line ending both in the
-# working tree (even on Windows) and in the repository.
+# Use `eol=lf` for files that should have the LF line ending both in the working
+# tree (even on Windows) and in the repository.
 #
 # *.sh text eol=lf
 
@@ -20,10 +20,9 @@
 
 # Use `linguist-language` to specify the language for certain files.
 #
-# The idea here is to get decent GitHub syntax highlighting (in PRs, diffs,
-# etc.) working for our files. Note that build2 is obviously neither Shell
-# nor YAML, but mapping them to these languages is the closest approximation
-# we currently have to drive the highlighter.
+# Note that build2 is obviously neither Shell nor YAML, but mapping them to
+# these languages is the closest approximation we currently have to drive GitHub
+# highlighter.
 #
 *.build       linguist-language=Shell
   buildfile   linguist-language=Shell
