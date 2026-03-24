@@ -1,14 +1,15 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <cstring>
+#include <filesystem>
 #include <iostream>
-#include <thread>
 #include <memory>
 #include <string>
-#include <cstring> // For memcmp
+#include <thread>
 
 #include <boost/asio/signal_set.hpp>
-#include <boost/asio/steady_timer.hpp> // For Windows fallback
+#include <boost/asio/steady_timer.hpp>
 
 // #include <cpptrace/cpptrace.hpp>
 
@@ -26,7 +27,10 @@
 #include <mine/mine-window-render.hxx>
 #include <mine/mine-window-input.hxx>
 
+#include <mine/mine-utility.hxx>
+
 using namespace std;
+using namespace std::filesystem;
 
 namespace mine
 {
@@ -470,7 +474,9 @@ namespace mine
            << "info: opengl renderer " << gl_.renderer () << "\n"
            << "info: opengl vendor " << gl_.vendor () << endl;
 
-      if (!ren_.load_font ("/usr/share/fonts/adwaita-mono-fonts/AdwaitaMono-Regular.ttf", 28))
+      path font_path = build_install_data / "fonts" / "regular.ttf";
+
+      if (!ren_.load_font (font_path.c_str (), 28))
       {
         cerr << "warning: failed to load default font. text rendering disabled." << endl;
       }
