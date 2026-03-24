@@ -7,24 +7,13 @@ namespace mine
   class quit_command : public command
   {
   public:
-    virtual editor_state
-    execute (const editor_state& s) const override
-    {
-      // Meta-command: implementation is bypassed by editor_core::dispatch
-      //
-      return s;
-    }
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
 
-    virtual std::string_view
-    name () const noexcept override
-    {
-      return "quit";
-    }
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
 
-    virtual bool
-    modifies_buffer () const noexcept override
-    {
-      return false;
-    }
+    [[nodiscard]] bool
+    modifies_buffer () const noexcept override;
   };
 }

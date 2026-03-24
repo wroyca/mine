@@ -525,7 +525,12 @@ namespace mine
                                                    static_cast<float> (y),
                                                    core_.current ()));
 
-          mouse_event me {sp.col, sp.row, 0, mod, st};
+          mouse_event me {sp.col,
+                          sp.row,
+                          static_cast<mouse_button> (0),
+                          mod,
+                          st};
+
           core_.handle_input (me);
 
           track_ = true;

@@ -121,7 +121,7 @@ namespace mine
         //
         uint8_t b (static_cast<uint8_t> (pb & ~0x3C));
 
-        return mouse_event {x, y, b, m, s};
+        return mouse_event {x, y, static_cast<mouse_button>(b), m, s};
       }
     }
 

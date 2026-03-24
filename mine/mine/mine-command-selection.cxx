@@ -1,13 +1,12 @@
 #include <mine/mine-command-selection.hxx>
 #include <mine/mine-core-view.hxx>
 
+using namespace std;
+
 namespace mine
 {
-  // begin_selection_command
-  //
-
   begin_selection_command::
-  begin_selection_command (std::uint16_t x, std::uint16_t y)
+  begin_selection_command (uint16_t x, uint16_t y)
     : x_ (x),
       y_ (y)
   {
@@ -31,7 +30,7 @@ namespace mine
     return s.with_cursor (c);
   }
 
-  std::string_view begin_selection_command::
+  string_view begin_selection_command::
   name () const noexcept
   {
     return "begin_selection";
@@ -43,11 +42,8 @@ namespace mine
     return false;
   }
 
-  // update_selection_command
-  //
-
   update_selection_command::
-  update_selection_command (std::uint16_t x, std::uint16_t y)
+  update_selection_command (uint16_t x, uint16_t y)
     : x_ (x),
       y_ (y)
   {
@@ -72,7 +68,7 @@ namespace mine
     return s.with_cursor (c);
   }
 
-  std::string_view update_selection_command::
+  string_view update_selection_command::
   name () const noexcept
   {
     return "update_selection";
@@ -87,7 +83,7 @@ namespace mine
   // end_selection_command
   //
   end_selection_command::
-  end_selection_command (std::uint16_t x, std::uint16_t y)
+  end_selection_command (uint16_t x, uint16_t y)
     : x_ (x),
       y_ (y)
   {
@@ -106,7 +102,7 @@ namespace mine
     return s;
   }
 
-  std::string_view end_selection_command::
+  string_view end_selection_command::
   name () const noexcept
   {
     return "end_selection";

@@ -7,22 +7,24 @@
 
 namespace mine
 {
+#pragma pack(push, 1) // Force 1-byte alignment, stripping the 4-byte tail padding
+
   // Handle the initial mouse press. We just move the cursor to the target
   // coordinates and drop the selection anchor (the mark) here.
   //
-  class begin_selection_command: public command
+  class begin_selection_command : public command
   {
   public:
     explicit
     begin_selection_command (std::uint16_t x, std::uint16_t y);
 
-    editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] editor_state
+    execute (const editor_state &s) const override;
 
-    std::string_view
+    [[nodiscard]] std::string_view
     name () const noexcept override;
 
-    bool
+    [[nodiscard]] bool
     modifies_buffer () const noexcept override;
 
   private:
@@ -33,19 +35,19 @@ namespace mine
   // Fire as the mouse is dragged. We update the cursor point while leaving the
   // original anchor intact, thereby highlighting the region between them.
   //
-  class update_selection_command: public command
+  class update_selection_command : public command
   {
   public:
     explicit
     update_selection_command (std::uint16_t x, std::uint16_t y);
 
-    editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] editor_state
+    execute (const editor_state &s) const override;
 
-    std::string_view
+    [[nodiscard]] std::string_view
     name () const noexcept override;
 
-    bool
+    [[nodiscard]] bool
     modifies_buffer () const noexcept override;
 
   private:
@@ -57,23 +59,25 @@ namespace mine
   // just leave the selection active. Though in some environments, this is the
   // hook we use to copy the highlighted text to the system clipboard.
   //
-  class end_selection_command: public command
+  class end_selection_command : public command
   {
   public:
     explicit
     end_selection_command (std::uint16_t x, std::uint16_t y);
 
-    editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] editor_state
+    execute (const editor_state &s) const override;
 
-    std::string_view
+    [[nodiscard]] std::string_view
     name () const noexcept override;
 
-    bool
+    [[nodiscard]] bool
     modifies_buffer () const noexcept override;
 
   private:
     std::uint16_t x_;
     std::uint16_t y_;
   };
+
+#pragma pack(pop) // Restore default alignment rules
 }
