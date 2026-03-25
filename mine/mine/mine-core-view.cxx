@@ -1,6 +1,6 @@
 #include <mine/mine-core-view.hxx>
 #include <mine/mine-terminal-render.hxx>
-#include <mine/mine-unicode-grapheme-iterator.hxx>
+#include <mine/mine-unicode.hxx>
 
 namespace mine
 {

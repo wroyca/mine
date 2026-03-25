@@ -12,7 +12,7 @@
 
 #include <mine/mine-types.hxx>
 #include <mine/mine-assert.hxx>
-#include <mine/mine-unicode-grapheme-index.hxx>
+#include <mine/mine-unicode.hxx>
 
 namespace mine
 {

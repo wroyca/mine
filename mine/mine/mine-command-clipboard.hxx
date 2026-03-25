@@ -3,7 +3,7 @@
 #include <mine/mine-command-base.hxx>
 
 #include <mine/mine-clipboard.hxx>
-#include <mine/mine-unicode-grapheme.hxx>
+#include <mine/mine-unicode.hxx>
 
 namespace mine
 {

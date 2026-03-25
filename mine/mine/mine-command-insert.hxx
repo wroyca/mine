@@ -4,8 +4,7 @@
 #include <utility>
 
 #include <mine/mine-command-base.hxx>
-#include <mine/mine-unicode-assert.hxx>
-#include <mine/mine-unicode-grapheme.hxx>
+#include <mine/mine-unicode.hxx>
 
 namespace mine
 {

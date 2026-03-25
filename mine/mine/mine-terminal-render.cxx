@@ -1,6 +1,6 @@
 #include <mine/mine-terminal-render.hxx>
 #include <mine/mine-assert.hxx>
-#include <mine/mine-unicode-grapheme-iterator.hxx>
+#include <mine/mine-unicode.hxx>
 
 #include <iostream>
 #include <sstream>
