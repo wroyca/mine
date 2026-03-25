@@ -7,7 +7,7 @@
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-core-state.hxx>
 #include <mine/mine-io-file.hxx>
-#include <mine/mine-command-base.hxx>
+#include <mine/mine-command.hxx>
 #include <mine/mine-terminal-input.hxx>
 
 namespace mine
