@@ -5,7 +5,6 @@ summary: mine text editor
 license: GPL-3.0-or-later ; GNU General Public License v3.0 or later.
 depends: * build2 >= 0.18.0-
 depends: * bpkg >= 0.18.0-
-
 depends: libboost-asio >= 1.87.0
 depends: libfreetype >=	2.11.1
 depends: libicui18n >= 65.1.0
@@ -25,3 +24,5 @@ glfw >= 3.4.0
   }
 }
 \
+
+builds: default experimental ; Only modern compilers are supported.
