@@ -3,12 +3,19 @@
 #include <functional>
 #include <optional>
 #include <variant>
+#include <fstream>
+#include <sstream>
+#include <map>
+
+#include <lua.hpp>
 
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-core-state.hxx>
 #include <mine/mine-io-file.hxx>
 #include <mine/mine-command.hxx>
 #include <mine/mine-terminal-input.hxx>
+#include <mine/mine-utility.hxx>
+#include <mine/mine-vm.hxx>
 
 namespace mine
 {
@@ -43,6 +50,12 @@ namespace mine
       : h_ (std::move (s)),
         l_ (&l)
     {
+      // Capture 'this' so the VM can securely invoke our message display.
+      //
+      print_handler_ = [this] (std::string_view msg)
+      {
+        show_message (std::string (msg));
+      };
     }
 
     // State Access
@@ -52,6 +65,23 @@ namespace mine
     current () const noexcept
     {
       return h_.current ();
+    }
+
+    // Bindings API
+    //
+
+    void
+    bind_key (std::string_view chord, std::string_view action)
+    {
+      auto evt (parse_key_chord (chord));
+      if (evt)
+      {
+        keymaps_[*evt] = std::string (action);
+      }
+      else
+      {
+        show_message ("Invalid key chord for mapping: " + std::string (chord));
+      }
     }
 
     // Command Dispatch
@@ -80,12 +110,77 @@ namespace mine
         return;
       }
 
+      if (cmd.name () == "save")
+      {
+        save ();
+        return;
+      }
+
+      if (cmd.name () == "save_and_quit")
+      {
+        save ();
+        quit ();
+        return;
+      }
+
       const auto& pre (h_.current ());
       auto post (cmd.execute (pre));
 
+      // Handle the command line submission.
+      //
+      if (post.cmdline ().is_submitted)
+      {
+        std::string a (post.cmdline ().content);
+
+        // Deactivate and clear the command line state before we execute the
+        // action.
+        //
+        auto c (post.cmdline ());
+        c.active = false;
+        c.is_submitted = false;
+        c.content.clear ();
+        c.cursor_pos = 0;
+
+        post = post.with_cmdline (c);
+        h_ = h_.replace_current (std::move (post));
+
+        // Delegate to the command interface to parse the string.
+        //
+        auto pc (parse_cmdline (a));
+
+        if (pc)
+        {
+          dispatch (*pc);
+        }
+        else
+        {
+          // We didn't recognize the command. Figure out if the user actually
+          // typed something or if they just hit enter on a bunch of whitespace.
+          //
+          auto b (a.find_first_not_of (" \t"));
+
+          if (b != std::string::npos)
+          {
+            auto e (a.find_last_not_of (" \t"));
+            auto t (a.substr (b, e - b + 1));
+
+            show_message ("Unknown command: " + t);
+          }
+          else
+          {
+            // The input was effectively empty, so just force the UI to redraw
+            // and clear out the line.
+            //
+            notify (change_hint::selection);
+          }
+        }
+
+        return;
+      }
+
       change_hint hint;
 
-      if (cmd.modifies_buffer ())
+      if (cmd.modifies_buffer (pre))
       {
         // Text edits are destructive. We push a new state to the history
         // stack so the user can undo them.
@@ -102,22 +197,24 @@ namespace mine
         hint = change_hint::view;
         h_ = h_.push (std::move (post));
       }
-      else if (pre.get_cursor () != post.get_cursor ())
+      else if (pre.get_cursor () != post.get_cursor () || pre.cmdline () != post.cmdline ())
       {
-        // Cursor movement.
+        // Cursor movement or cmdline activity.
         //
-        // If either the previous state or the new state has an active
-        // selection mark, it means the highlighted region on screen just
-        // changed geometry. We must force a full redraw.
+        // If either the previous state or the new state has an active selection
+        // mark, or if we typed in the cmdline, it means the visual state
+        // changed. We must force a full redraw via 'selection'.
         //
-        if (pre.get_cursor ().has_mark () || post.get_cursor ().has_mark ())
+        if (pre.get_cursor ().has_mark () ||
+            post.get_cursor ().has_mark () ||
+            pre.cmdline () != post.cmdline ())
           hint = change_hint::selection;
         else
           hint = change_hint::cursor;
 
         // Note that we replace the current node. We explicitly do not want
         // to spam the undo stack with hundreds of states while the user is
-        // dragging the mouse to select text or holding down an arrow key.
+        // dragging the mouse to select text or typing in the cmdline.
         //
         h_ = h_.replace_current (std::move (post));
       }
@@ -136,6 +233,20 @@ namespace mine
     void
     handle_input (const input_event& e)
     {
+      // First check user-defined key bindings.
+      //
+      if (auto it = keymaps_.find (e); it != keymaps_.end ())
+      {
+        auto c = make_command_by_name (it->second);
+        if (c)
+        {
+          dispatch (*c);
+          return;
+        }
+      }
+
+      // Fallback to the standard command mappings.
+      //
       auto c (make_command (e));
 
       if (c)
@@ -165,6 +276,10 @@ namespace mine
         h_ = h_.undo ();
         notify (change_hint::content);
       }
+      else
+      {
+        show_message ("Already at oldest change");
+      }
     }
 
     void
@@ -174,6 +289,10 @@ namespace mine
       {
         h_ = h_.redo ();
         notify (change_hint::content);
+      }
+      else
+      {
+        show_message ("Already at newest change");
       }
     }
 
@@ -220,7 +339,10 @@ namespace mine
       // Cannot save a "new file" that hasn't been named yet.
       //
       if (!std::holds_alternative<existing_file> (fb_.state))
-        return; // @@ TODO: Trigger "save as" prompt logic here.
+      {
+        show_message ("No file name");
+        return;
+      }
 
       // Sync the editor content into the file buffer before saving.
       //
@@ -270,6 +392,109 @@ namespace mine
     on_message (msg_callback c)
     {
       cb_msg_ = std::move (c);
+    }
+
+    // Display a transient message directly onto the command line prompt.
+    //
+    void
+    show_message (const std::string& m)
+    {
+      auto s (h_.current ().with_cmdline_message (m));
+      h_ = h_.replace_current (std::move (s));
+      notify (change_hint::selection);
+
+      // Pass it down to the callback if anyone is listening.
+      //
+      if (cb_msg_)
+        cb_msg_ (m);
+    }
+
+    // Scripting configuration initialization.
+    //
+    void
+    load_config ()
+    {
+      vm_.initialize ();
+
+      // Hook up the Lua print function to our command line display so that user
+      // debug output goes to the right place.
+      //
+      vm_.set_print_handler (&print_handler_);
+
+      // Expose the core instance to the VM as global userdata before we run the
+      // configuration. Native bindings will fish this out from the stack to
+      // reach back into the host environment.
+      //
+      vm_.set_global_userdata ("__mine_core", this);
+
+      std::vector<native_binding> bs ({{"bind",
+                                        [] (lua_State* l) -> int
+      {
+        lua_getglobal (l, "__mine_core");
+        auto* c (static_cast<core*> (lua_touserdata (l, -1)));
+        lua_pop (l, 1);
+
+        if (c && lua_isstring (l, 1) && lua_isstring (l, 2))
+        {
+          c->bind_key (lua_tostring (l, 1), lua_tostring (l, 2));
+        }
+        return 0;
+      }}});
+
+      vm_.register_module ("mine", bs);
+
+      // Now bootstrap Fennel. We need to read the compiler from the install
+      // data directory and evaluate it directly into the VM.
+      //
+      std::filesystem::path fp (build_install_data / "fennel.lua");
+      std::ifstream f (fp, std::ios::binary);
+
+      if (f)
+      {
+        std::ostringstream s;
+        s << f.rdbuf ();
+
+        auto r (vm_.load_fennel (s.str ()));
+
+        if (!r)
+        {
+          show_message ("Fennel load error: " + *r.error);
+          return;
+        }
+
+        // Set up the package path for Fennel. We want the user to be able to
+        // require other .fnl files from their config directory, so we inject it
+        // into the search path.
+        //
+        auto cd (get_user_config_dir ());
+
+        if (cd)
+        {
+          std::string p ((*cd / "?.fnl").string ());
+          vm_.add_fennel_path (p);
+        }
+
+        // Evaluate the main configuration file if it actually exists.
+        //
+        auto cf (get_user_config_file ());
+
+        if (cf && std::filesystem::exists (*cf))
+        {
+          auto er (vm_.execute_fennel_file (cf->string ()));
+
+          if (!er)
+          {
+            show_message ("Config error: " + *er.error);
+          }
+        }
+      }
+      else
+      {
+        // Warn the user. They might be running from a weird prefix where the
+        // data files are missing.
+        //
+        show_message ("Warning: fennel.lua not found at " + fp.string ());
+      }
     }
 
     // Handle terminal window resize.
@@ -333,21 +558,23 @@ namespace mine
                 .with_buffer (fb_.content)
                 .with_modified (false));
 
-        // @@ Note: For a background reload, we might want to attempt to
-        // preserve history. For now, we treat it as a fresh start.
-        //
         h_ = history (std::move (s));
         notify (change_hint::content);
       }
 
-      if (msg && cb_msg_)
-        cb_msg_ (*msg);
+      if (msg)
+      {
+        show_message (*msg);
+      }
     }
 
   private:
     history h_;
     file_buffer fb_;
     async_loop* l_;
+    vm vm_ {vm_limits::permissive()};
+    std::map<input_event, std::string> keymaps_;
+    std::function<void (std::string_view)> print_handler_;
 
     change_callback cb_change_;
     msg_callback cb_msg_;

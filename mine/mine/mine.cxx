@@ -220,10 +220,7 @@ namespace mine
       // defaulted to 80x24 and then resized, the user might see a single frame
       // of wrong layout flickering at startup.
       //
-      auto s (core_.current ());
-      auto v (s.view ().resize (*sz));
-
-      core_ = editor_core (loop_, s.with_view (v));
+      core_.resize (*sz);
       ren_ = make_unique<terminal_renderer> (*sz);
 
       // Wire up Logic -> UI.
@@ -240,10 +237,10 @@ namespace mine
       core_.on_message (
         [this] (const string& m)
         {
-          // TODO: This should eventually feed into a status bar component.
-          //
           last_msg_ = m;
         });
+
+      core_.load_config ();
 
       // Wire up Input -> Logic.
       //
@@ -487,11 +484,7 @@ namespace mine
       // trying to resize a zero-bound view before the first real frame resize.
       //
       screen_size sz (24, 80);
-
-      auto s (core_.current ());
-      auto v (s.view ().resize (sz));
-
-      core_ = editor_core (loop_, s.with_view (v));
+      core_.resize (sz);
 
       // Wire up Logic -> UI.
       //
@@ -506,10 +499,10 @@ namespace mine
 
       core_.on_message ([this] (const string& m)
       {
-        // TODO: Route to GUI status bar.
-        //
         (void) m;
       });
+
+      core_.load_config ();
 
       // Input wiring.
       //

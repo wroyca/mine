@@ -421,6 +421,7 @@ namespace mine
     for (size_t i (first); i < last; ++i)
     {
       // Draw the end-of-buffer tildes if we are past the last line
+      //
       if (i >= b.line_count ())
       {
         uint32_t cp = '~';
@@ -520,18 +521,24 @@ namespace mine
                  c_cur_);
     }
 
-    // Prepare status line elements (TUI style)
+    // UI Panels (Status Line and Cmdline)
     //
-    float ui_h = lh;
+    float ui_h = lh * 2.0f;
     float ui_w = vp.x;
     float ui_x = 0.0f;
     float ui_y = vp.y - ui_h;
 
     push_ui_quad (v_ui_,
                   vec2 (ui_x, ui_y),
+                  vec2 (ui_x + ui_w, ui_y + lh),
+                  vec4 (0.7f, 0.7f, 0.7f, 1.0f),
+                  0.0f);
+
+    push_ui_quad (v_ui_,
+                  vec2 (ui_x, ui_y + lh),
                   vec2 (ui_x + ui_w, ui_y + ui_h),
-                  vec4 (0.7f, 0.7f, 0.7f, 1.0f), // Light gray background
-                  0.0f);                         // No radius
+                  vec4 (0.1f, 0.1f, 0.1f, 1.0f),
+                  0.0f);
 
     string st = " Line " + to_string (c.line ().value + 1) +
                 ", Col " + to_string (c.column ().value + 1);
@@ -566,10 +573,92 @@ namespace mine
       }
     }
 
-    // Flush texture uploads to the GPU if we rasterized new glyphs this frame.
-    // We batch these up so we aren't stalling the pipeline with a bunch of tiny
-    // sub-image updates.
+    // Figure out what we are actually rendering. If the command line is active,
+    // we prefix it with a colon to act as a prompt. Otherwise, we just fall
+    // back to the status message.
     //
+    string cs (s.cmdline ().active
+               ? ":" + s.cmdline ().content
+               : s.cmdline ().message);
+
+    float text_c_x (0.0f);
+    float text_c_y (ui_y + lh);
+
+    // Render the command or message text.
+    //
+    // Note that we currently just iterate over bytes rather than doing full
+    // UTF-8 decoding here. This works fine for basic ASCII text, but we might
+    // need to revisit this if status messages start containing multi-byte
+    // characters.
+    //
+    for (char c : cs)
+    {
+      uint32_t cp (static_cast<uint32_t> (c));
+      ensure_glyph (cp);
+
+      auto i (gl_.find (cp));
+      if (i != gl_.end ())
+      {
+        const auto& g (i->second);
+
+        float x0 (text_c_x + g.bx);
+        float y0 (text_c_y + (asc - g.by));
+        float x1 (x0 + g.w);
+        float y1 (y0 + g.h);
+
+        push_quad (v_ui_txt_,
+                   vec2 (x0, y0),
+                   vec2 (x1, y1),
+                   vec2 (g.uv.u0, g.uv.v0),
+                   vec2 (g.uv.u1, g.uv.v1),
+                   vec4 (1.0f, 1.0f, 1.0f, 1.0f));
+
+        text_c_x += g.adv;
+      }
+    }
+
+    // Now deal with the cursor, but only if the user is actually text_c_yping.
+    //
+    if (s.cmdline ().active)
+    {
+      float cx (0.0f);
+
+      // Account for the prompt character we prepended earlier so the cursor
+      // does not end up inside the colon.
+      //
+      ensure_glyph (':');
+      cx += gl_[':'].adv;
+
+      string_view co (s.cmdline ().content);
+      size_t p (s.cmdline ().cursor_pos);
+      size_t i (0);
+
+      // We need to calculate the exact X offset for the cursor. Because the
+      // user input can contain UTF-8, we have to step through the actual
+      // grapheme boundaries instead of just counting bytes up to the cursor
+      // position.
+      //
+      while (i < p && i < co.size ())
+      {
+        size_t n (next_grapheme_boundary (co, i));
+        string_view gs (co.substr (i, n - i));
+        uint32_t cp (decode_utf8 (gs));
+
+        ensure_glyph (cp);
+        cx += gl_[cp].adv;
+        i = n;
+      }
+
+      // Draw the cursor itself. We just push a simple colored quad for it.
+      //
+      push_quad (v_sld_,
+                 vec2 (cx, text_c_y),
+                 vec2 (cx + 2.0f, text_c_y + lh),
+                 vec2 (0.0f, 0.0f),
+                 vec2 (0.0f, 0.0f),
+                 c_cur_);
+    }
+
     if (up_.is_dirty ())
     {
       auto r (up_.flush ());

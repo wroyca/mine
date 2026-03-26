@@ -93,7 +93,7 @@ namespace mine
     std::string  text;
     key_modifier modifiers;
 
-    bool operator== (const text_input_event&) const = default;
+    auto operator<=> (const text_input_event&) const = default;
   };
 
   // Non-printable control key press.
@@ -103,7 +103,7 @@ namespace mine
     special_key  key;
     key_modifier modifiers;
 
-    bool operator== (const special_key_event&) const = default;
+    auto operator<=> (const special_key_event&) const = default;
   };
 
   enum class mouse_button : uint8_t
@@ -134,7 +134,7 @@ namespace mine
     key_modifier  modifiers;
     mouse_state   state;
 
-    bool operator== (const mouse_event&) const = default;
+    auto operator<=> (const mouse_event&) const = default;
   };
 
   // Terminal window resize notification.
@@ -143,7 +143,7 @@ namespace mine
   {
     screen_size new_size;
 
-    bool operator== (const resize_event&) const = default;
+    auto operator<=> (const resize_event&) const = default;
   };
 
   // The unified input stream type.

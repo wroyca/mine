@@ -51,14 +51,15 @@ namespace mine
     std::size_t
     height () const noexcept
     {
-      // Reserve one row at the bottom for the status line.
+      // Reserve two row at the bottom for the status line and one for the
+      // cmdline.
       //
       // @@ TODO: Hardcoding this deduction here is architecturally suspicious.
       // Ideally, the "screen size" passed to us should be the *content* area
       // size, calculated by the parent window manager, rather than us knowing
       // about UI chrome. But it works for now.
       //
-      return sz_.rows > 0 ? sz_.rows - 1 : 0;
+      return sz_.rows > 1 ? sz_.rows - 2 : 0;
     }
 
     // Coordinate Mapping

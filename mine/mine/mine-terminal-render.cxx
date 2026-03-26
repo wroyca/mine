@@ -93,6 +93,7 @@ namespace mine
     //
     terminal_screen_builder next_builder (current_screen_);
     draw_status_line (next_builder, s);
+    draw_cmdline (next_builder, s);
     terminal_screen next = next_builder.finish ();
 
     // Diff only the last row.
@@ -102,10 +103,10 @@ namespace mine
     //
     auto sz (current_screen_.size ());
 
-    if (sz.rows > 0)
+    if (sz.rows > 1)
     {
-      uint16_t r (sz.rows - 1);
-      screen_diff diff (compute_screen_diff (current_screen_, next, r, 1));
+      uint16_t r (sz.rows - 2);
+      screen_diff diff (compute_screen_diff (current_screen_, next, r, 2));
 
       if (!diff.empty ())
       {
@@ -190,6 +191,7 @@ namespace mine
 
     draw_buffer (scr, s);
     draw_status_line (scr, s);
+    draw_cmdline (scr, s);
 
     return scr.finish ();
   }
@@ -216,10 +218,9 @@ namespace mine
       se = max (c.mark (), c.position ());
     }
 
-    // Leave the bottom row for the status line. If the terminal is
-    // pathologically small (0 rows), we just don't draw any text rows.
+    // Leave the bottom two rows for the status line and cmdline.
     //
-    uint16_t rws (sz.rows > 0 ? sz.rows - 1 : 0);
+    uint16_t rws (sz.rows > 1 ? sz.rows - 2 : 0);
     uint16_t lim (sz.cols);
 
     for (uint16_t r (0); r < rws; ++r)
@@ -342,10 +343,10 @@ namespace mine
   draw_status_line (terminal_screen_builder& scr, const editor_state& s) const
   {
     auto sz (scr.size ());
-    if (sz.rows == 0)
+    if (sz.rows <= 1)
       return;
 
-    uint16_t row (sz.rows - 1);
+    uint16_t row (sz.rows - 2);
 
     // Build status string: " Line X, Col Y [Modified]"
     //
@@ -383,8 +384,39 @@ namespace mine
     }
   }
 
-  // Low-level Output (ANSI)
-  //
+  void terminal_renderer::
+  draw_cmdline (terminal_screen_builder& scr, const editor_state& s) const
+  {
+    auto sz (scr.size ());
+    if (sz.rows == 0)
+      return;
+
+    uint16_t row (sz.rows - 1);
+
+    string st;
+    if (s.cmdline ().active)
+      st = ":" + s.cmdline ().content;
+    else
+      st = s.cmdline ().message;
+
+    if (st.size () > sz.cols)
+      st.resize (sz.cols);
+
+    cell_attributes attr {.fg = 7, .bg = 0};
+
+    uint16_t c (0);
+    for (char ch : st)
+    {
+      scr.set_char (screen_position (row, c), ch, attr);
+      ++c;
+    }
+
+    while (c < sz.cols)
+    {
+      scr.set_char (screen_position (row, c), ' ', attr);
+      ++c;
+    }
+  }
 
   void terminal_renderer::
   apply_diff (const screen_diff& d)
@@ -430,6 +462,48 @@ namespace mine
   void terminal_renderer::
   position_cursor (const editor_state& s)
   {
+    auto& cl (s.cmdline ());
+
+    if (cl.active)
+    {
+      auto sz (current_screen_.size ());
+
+      // Determine the bottom row. Protect against underflow if the screen size
+      // happens to be temporarily bogus (for example, 0 rows during a rapid
+      // terminal resize).
+      //
+      uint16_t r (sz.rows > 0 ? sz.rows - 1 : 0);
+
+      // Start at column 1 to account for the command prompt character (':').
+      //
+      uint16_t c (1);
+
+      std::string_view v (cl.content);
+      std::size_t p (cl.cursor_pos);
+      std::size_t i (0);
+
+      // Advance through the content up to the cursor position to calculate its
+      // true visual width on the screen. We have to do this grapheme by
+      // grapheme since UTF-8 sequences can have varying terminal widths.
+      //
+      while (i < p && i < v.size ())
+      {
+        std::size_t n (next_grapheme_boundary (v, i));
+        int w (estimate_grapheme_width (v.substr (i, n - i)));
+
+        // Treat zero or negative width graphemes as width 1 so we don't end up
+        // overlapping characters visually if the estimator gets confused by
+        // weird terminal states.
+        //
+        c += static_cast<uint16_t> (w > 0 ? w : 1);
+        i = n;
+      }
+
+      move_cursor (screen_position (r, c));
+      show_cursor ();
+      return;
+    }
+
     const auto& v (s.view ());
     const auto& c (s.get_cursor ());
     const auto& buf (s.buffer ());

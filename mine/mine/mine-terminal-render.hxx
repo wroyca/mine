@@ -72,6 +72,9 @@ namespace mine
     void
     draw_status_line (terminal_screen_builder& screen, const editor_state& state) const;
 
+    void
+    draw_cmdline (terminal_screen_builder& screen, const editor_state& state) const;
+
     // ANSI Output helpers.
     //
     void

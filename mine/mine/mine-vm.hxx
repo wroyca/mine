@@ -155,6 +155,18 @@ namespace mine
     [[nodiscard]] bool
     fennel_loaded () const;
 
+    // Add a directory format to `fennel.path` so (require ...) works nicely for
+    // user configuration submodules. Example argument: "~/.config/mine/?.fnl"
+    //
+    void
+    add_fennel_path (std::string_view search_path);
+
+    // Override Lua's default `print` function to route output to a custom
+    // handler.
+    //
+    void
+    set_print_handler (std::function<void (std::string_view)>* handler);
+
     // Script execution.
     //
     // Execute Lua code directly.
@@ -162,15 +174,20 @@ namespace mine
     script_result
     execute_lua (std::string_view code);
 
+    // Load and execute a Lua file.
+    //
+    script_result
+    execute_lua_file (std::string_view path);
+
     // Execute Fennel code (requires fennel_loaded()).
     //
     script_result
     execute_fennel (std::string_view code);
 
-    // Load and execute a Lua file.
+    // Load and execute a Fennel file directly.
     //
     script_result
-    execute_lua_file (std::string_view path);
+    execute_fennel_file (std::string_view path);
 
     // Compile Fennel to Lua (for AOT compilation).
     //

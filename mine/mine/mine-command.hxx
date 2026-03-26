@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <optional>
 
 #include <mine/mine-clipboard.hxx>
 #include <mine/mine-core-state.hxx>
@@ -49,8 +50,13 @@ namespace mine
     // new undo frame.
     //
     [[nodiscard]] virtual bool
-    modifies_buffer () const noexcept = 0;
+    modifies_buffer (const editor_state& s) const noexcept = 0;
   };
+
+  // Parse a key chord string (like "C-o" or "S-up") into an input event.
+  //
+  std::optional<input_event>
+  parse_key_chord (std::string_view chord);
 
   // Translate raw input events into semantic commands.
   //
@@ -58,6 +64,16 @@ namespace mine
   //
   std::unique_ptr<command>
   make_command (const input_event& e);
+
+  // Create a command object by its semantic string name (e.g. "insert_newline").
+  //
+  std::unique_ptr<command>
+  make_command_by_name (std::string_view name);
+
+  // Parse a Vim-style ex command string into a semantic command.
+  //
+  std::unique_ptr<command>
+  parse_cmdline (std::string_view cmd);
 
   class copy_command : public command
   {
@@ -69,7 +85,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 
   class paste_command : public command
@@ -82,7 +98,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 
   // Handle the Backspace key.
@@ -101,7 +117,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 
   // Handle the Delete key.
@@ -121,7 +137,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 
   // Insert a span of text at the current cursor position.
@@ -144,7 +160,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
 
   private:
     std::string text_;
@@ -165,7 +181,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 
   // The vocabulary of abstract movement directions.
@@ -220,7 +236,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
 
   private:
     move_direction d_;
@@ -228,6 +244,32 @@ namespace mine
   };
 
 #pragma pack(pop)
+
+  class save_command : public command
+  {
+  public:
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
+
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
+
+    [[nodiscard]] bool
+    modifies_buffer (const editor_state& s) const noexcept override;
+  };
+
+  class save_and_quit_command : public command
+  {
+  public:
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
+
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
+
+    [[nodiscard]] bool
+    modifies_buffer (const editor_state& s) const noexcept override;
+  };
 
   class quit_command : public command
   {
@@ -239,7 +281,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 
   class redo_command : public command
@@ -252,7 +294,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 
 #pragma pack(push, 1)
@@ -273,7 +315,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
 
   private:
     std::uint16_t x_;
@@ -296,7 +338,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
 
   private:
     std::uint16_t x_;
@@ -320,7 +362,7 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
 
   private:
     std::uint16_t x_;
@@ -339,6 +381,32 @@ namespace mine
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer () const noexcept override;
+    modifies_buffer (const editor_state& s) const noexcept override;
+  };
+
+  class toggle_cmdline_command : public command
+  {
+  public:
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
+
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
+
+    [[nodiscard]] bool
+    modifies_buffer (const editor_state& s) const noexcept override;
+  };
+
+  class escape_command : public command
+  {
+  public:
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
+
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
+
+    [[nodiscard]] bool
+    modifies_buffer (const editor_state& s) const noexcept override;
   };
 }

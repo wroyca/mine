@@ -2,6 +2,7 @@
 #include <mine/mine-assert.hxx>
 
 #include <cstring>
+#include <iostream>
 
 #include <lua.hpp>
 
@@ -9,6 +10,68 @@ using namespace std;
 
 namespace mine
 {
+  namespace
+  {
+    // Native C bridge that replaces Lua's default print.
+    //
+    int
+    lua_print_bridge (lua_State* l)
+    {
+      int n (lua_gettop (l));
+      std::string r;
+
+      // We need Lua's tostring function to format the arguments.
+      //
+      lua_getglobal (l, "tostring");
+
+      for (int i (1); i <= n; ++i)
+      {
+        lua_pushvalue (l, -1); // push tostring.
+        lua_pushvalue (l, i);  // push argument.
+        lua_call (l, 1, 1);
+
+        size_t z;
+        const char* p (lua_tolstring (l, -1, &z));
+
+        // If tostring doesn't return a string, we have to bail out. This
+        // matches the standard Lua print behavior.
+        //
+        if (p == nullptr)
+          return luaL_error (l, "'tostring' must return a string to 'print'");
+
+        // Print normally spaces out multiple arguments with a tab character.
+        //
+        if (i > 1)
+          r += '\t';
+
+        r.append (p, z);
+
+        lua_pop (l, 1); // pop the string result.
+      }
+
+      lua_pop (l, 1); // pop tostring.
+
+      // Look up our injected handler pointer. We store it as light user data.
+      //
+      // Note that if it is missing for some reason, we fall back to stdout
+      // rather than failing silently.
+      //
+      lua_getglobal (l, "__mine_print_handler");
+
+      if (lua_islightuserdata (l, -1))
+      {
+        using cb = std::function<void (std::string_view)>;
+        auto* h (static_cast<cb*> (lua_touserdata (l, -1)));
+        (*h) (r);
+      }
+      else
+        std::cout << r << '\n';
+
+      lua_pop (l, 1);
+      return 0;
+    }
+  }
+
   // script_result
   //
 
@@ -308,6 +371,52 @@ namespace mine
     return fennel_loaded_;
   }
 
+void vm::
+  add_fennel_path (string_view p)
+  {
+    MINE_PRECONDITION (fennel_loaded_);
+    MINE_PRECONDITION (is_ready ());
+
+    // Grab the fennel module table.
+    //
+    lua_getglobal (L_, "fennel");
+
+    if (lua_istable (L_, -1))
+    {
+      lua_getfield (L_, -1, "path");
+
+      // The path really should be a string, but let's be defensive here just in
+      // case someone messed with the fennel table underneath us.
+      //
+      string cp (lua_isstring (L_, -1) ? lua_tostring (L_, -1) : "");
+      lua_pop (L_, 1);
+
+      string np (string (p) + ";" + cp);
+      lua_pushstring (L_, np.c_str ());
+      lua_setfield (L_, -2, "path");
+    }
+
+    lua_pop (L_, 1);
+  }
+
+  void vm::
+  set_print_handler (std::function<void (std::string_view)>* h)
+  {
+    MINE_PRECONDITION (is_ready ());
+
+    // Tuck the raw pointer to the function away in a global so that our static
+    // bridge can actually retrieve it when Lua tries to print something.
+    //
+    lua_pushlightuserdata (L_, h);
+    lua_setglobal (L_, "__mine_print_handler");
+
+    // Finally, clobber the base environment's print function with our own
+    // bridge.
+    //
+    lua_pushcfunction (L_, lua_print_bridge);
+    lua_setglobal (L_, "print");
+  }
+
   // Execution.
   //
 
@@ -476,6 +585,76 @@ namespace mine
 
     state_ = vm_state::ready;
     return script_result::ok_void ();
+  }
+
+  script_result
+  vm::execute_fennel_file (string_view p)
+  {
+    MINE_PRECONDITION (fennel_loaded_);
+    MINE_PRECONDITION (is_ready ());
+    MINE_PRECONDITION (limits_.allow_io);
+
+    // Grab the fennel module from the global state. It should be there, but
+    // let's be safe.
+    //
+    lua_getglobal (L_, "fennel");
+    if (!lua_istable (L_, -1))
+    {
+      lua_pop (L_, 1);
+      return script_result::fail ("fennel module not loaded");
+    }
+
+    // Extract the dofile function.
+    //
+    lua_getfield (L_, -1, "dofile");
+    if (!lua_isfunction (L_, -1))
+    {
+      lua_pop (L_, 2);
+      return script_result::fail ("fennel.dofile not found");
+    }
+
+    // We only need the function itself, so drop the table from the stack.
+    //
+    lua_remove (L_, -2);
+
+    lua_pushlstring (L_, p.data (), p.size ());
+
+    state_ = vm_state::executing;
+
+    if (lua_pcall (L_, 1, 1, 0) != LUA_OK)
+    {
+      // Bail out and grab the error. Notice that lua_tostring can technically
+      // return null, so we handle that just in case.
+      //
+      const char* e (lua_tostring (L_, -1));
+      last_error_ = e ? string (e) : "fennel execution error";
+      lua_pop (L_, 1);
+
+      state_ = vm_state::ready;
+      return script_result::fail (*last_error_);
+    }
+
+    // Try to salvage a return value if one was left on the stack. We only care
+    // about a few basic types here.
+    //
+    optional<string> r;
+
+    if (lua_gettop (L_) > 0)
+    {
+      if (lua_isstring (L_, -1))
+        r = lua_tostring (L_, -1);
+      else if (lua_isnumber (L_, -1))
+        r = to_string (lua_tonumber (L_, -1));
+      else if (lua_isboolean (L_, -1))
+        r = lua_toboolean (L_, -1) ? string ("true") : string ("false");
+
+      lua_pop (L_, 1);
+    }
+
+    state_ = vm_state::ready;
+    last_error_ = nullopt;
+
+    return r ? script_result::ok_with_value (*r) : script_result::ok_void ();
   }
 
   script_result vm::

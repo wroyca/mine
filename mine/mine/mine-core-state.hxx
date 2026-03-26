@@ -11,6 +11,26 @@
 
 namespace mine
 {
+  // Command Line State.
+  //
+  // Manages the prompt below the status bar for Vim-like commands (:w, :q,
+  // etc.)
+  //
+  struct cmdline_state
+  {
+    bool        active {false};
+    std::string content;
+    std::size_t cursor_pos {0};
+    std::string message;
+
+    // Transient flag indicating the user has pressed Enter and the core needs
+    // to parse and execute the command.
+    //
+    bool is_submitted {false};
+
+    bool operator== (const cmdline_state&) const = default;
+  };
+
   // The World.
   //
   // This aggregates editor state into a single immutable value. To change
@@ -26,18 +46,21 @@ namespace mine
       : b_ (make_empty_buffer ()),
         c_ (cursor_position (line_number (0), column_number (0))),
         v_ (line_number (0), screen_size (24, 80)),
-        m_ (false)
+        m_ (false),
+        cmd_ ()
     {
     }
 
     state (text_buffer b,
            cursor c,
            view v,
-           bool m = false)
+           bool m = false,
+           cmdline_state cmd = {})
       : b_ (std::move (b)),
         c_ (c),
         v_ (v),
-        m_ (m)
+        m_ (m),
+        cmd_ (std::move (cmd))
     {
     }
 
@@ -56,21 +79,19 @@ namespace mine
     bool
     modified () const noexcept { return m_; }
 
+    const cmdline_state&
+    cmdline () const noexcept { return cmd_; }
+
     // Transitions.
     //
 
     state
     with_buffer (text_buffer b) const
     {
-      // Clamp cursor to new bounds (e.g., if new buffer is smaller).
-      //
       auto nc (c_.clamp_to_buffer (b));
-
-      // Adjust view to ensure the cursor remains visible.
-      //
       auto nv (v_.scroll_to_cursor (nc, b));
 
-      return state (std::move (b), nc, nv, true);
+      return state (std::move (b), nc, nv, true, cmd_);
     }
 
     state
@@ -79,19 +100,33 @@ namespace mine
       auto nc (c.clamp_to_buffer (b_));
       auto nv (v_.scroll_to_cursor (nc, b_));
 
-      return state (b_, nc, nv, m_);
+      return state (b_, nc, nv, m_, cmd_);
     }
 
     state
     with_view (class view v) const
     {
-      return state (b_, c_, v, m_);
+      return state (b_, c_, v, m_, cmd_);
     }
 
     state
     with_modified (bool m) const
     {
-      return state (b_, c_, v_, m);
+      return state (b_, c_, v_, m, cmd_);
+    }
+
+    state
+    with_cmdline (cmdline_state cmd) const
+    {
+      return state (b_, c_, v_, m_, std::move (cmd));
+    }
+
+    state
+    with_cmdline_message (std::string m) const
+    {
+      cmdline_state c (cmd_);
+      c.message = std::move (m);
+      return state (b_, c_, v_, m_, std::move (c));
     }
 
     // Atomic update of both buffer and cursor (common for typing).
@@ -102,17 +137,18 @@ namespace mine
       auto nc (c.clamp_to_buffer (b));
       auto nv (v_.scroll_to_cursor (nc, b));
 
-      return state (std::move (b), nc, nv, true);
+      return state (std::move (b), nc, nv, true, cmd_);
     }
 
     auto
     operator<=> (const state&) const = delete;
 
   private:
-    text_buffer b_;
-    class cursor c_;
-    class view v_;
-    bool m_;
+    text_buffer   b_;
+    class cursor  c_;
+    class view    v_;
+    bool          m_;
+    cmdline_state cmd_;
   };
 
   // The Time Machine.

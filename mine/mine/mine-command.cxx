@@ -1,12 +1,78 @@
 #include <mine/mine-command.hxx>
 
 #include <mine/mine-core-view.hxx>
+#include <algorithm>
 
 using namespace std;
 
 namespace mine
 {
   command::~command () = default;
+
+  optional<input_event>
+  parse_key_chord (string_view chord)
+  {
+    key_modifier mods (key_modifier::none);
+    string_view key (chord);
+
+    while (true)
+    {
+      if      (key.starts_with("C-")) { mods = mods | key_modifier::ctrl;  key.remove_prefix(2); }
+      else if (key.starts_with("S-")) { mods = mods | key_modifier::shift; key.remove_prefix(2); }
+      else if (key.starts_with("A-")) { mods = mods | key_modifier::alt;   key.remove_prefix(2); }
+      else if (key.starts_with("M-")) { mods = mods | key_modifier::meta;  key.remove_prefix(2); }
+      else break;
+    }
+
+    if (key == "up")                          return special_key_event {special_key::up, mods};
+    if (key == "down")                        return special_key_event {special_key::down, mods};
+    if (key == "left")                        return special_key_event {special_key::left, mods};
+    if (key == "right")                       return special_key_event {special_key::right, mods};
+    if (key == "enter" || key == "return")    return special_key_event {special_key::enter, mods};
+    if (key == "esc"   || key == "escape")    return special_key_event {special_key::escape, mods};
+    if (key == "bs"    || key == "backspace") return special_key_event {special_key::backspace, mods};
+    if (key == "del"   || key == "delete")    return special_key_event {special_key::delete_key, mods};
+    if (key == "tab")                         return special_key_event {special_key::tab, mods};
+    if (key == "home")                        return special_key_event {special_key::home, mods};
+    if (key == "end")                         return special_key_event {special_key::end, mods};
+    if (key == "pageup")                      return special_key_event {special_key::page_up, mods};
+    if (key == "pagedown")                    return special_key_event {special_key::page_down, mods};
+
+    if (!key.empty())
+      return text_input_event {std::string(key), mods};
+
+    return std::nullopt;
+  }
+
+  unique_ptr<command>
+  make_command_by_name (string_view name)
+  {
+    if (name == "insert_newline")    return make_unique<insert_newline_command> ();
+    if (name == "delete_backward")   return make_unique<delete_backward_command> ();
+    if (name == "delete_forward")    return make_unique<delete_forward_command> ();
+    if (name == "move_up")           return make_unique<move_cursor_command> (move_direction::up);
+    if (name == "move_down")         return make_unique<move_cursor_command> (move_direction::down);
+    if (name == "move_left")         return make_unique<move_cursor_command> (move_direction::left);
+    if (name == "move_right")        return make_unique<move_cursor_command> (move_direction::right);
+    if (name == "move_line_start")   return make_unique<move_cursor_command> (move_direction::line_start);
+    if (name == "move_line_end")     return make_unique<move_cursor_command> (move_direction::line_end);
+    if (name == "move_buffer_start") return make_unique<move_cursor_command> (move_direction::buffer_start);
+    if (name == "move_buffer_end")   return make_unique<move_cursor_command> (move_direction::buffer_end);
+    if (name == "undo")              return make_unique<undo_command> ();
+    if (name == "redo")              return make_unique<redo_command> ();
+    if (name == "save")              return make_unique<save_command> ();
+    if (name == "quit")              return make_unique<quit_command> ();
+    if (name == "save_and_quit")     return make_unique<save_and_quit_command> ();
+    if (name == "copy")              return make_unique<copy_command> ();
+    if (name == "paste")             return make_unique<paste_command> ();
+    if (name == "toggle_cmdline")    return make_unique<toggle_cmdline_command> ();
+    if (name == "escape")            return make_unique<escape_command> ();
+
+    if (name.starts_with ("insert_text "))
+      return make_unique<insert_text_command> (std::string (name.substr(12)));
+
+    return nullptr;
+  }
 
   // Map the raw input event (which is a variant of specific event structures)
   // to an abstract command.
@@ -33,20 +99,13 @@ namespace mine
         //
         if (has_modifier (x.modifiers, key_modifier::ctrl))
         {
-          if (x.text == "q")
-            return make_unique<quit_command> ();
-
-          if (x.text == "z")
-            return make_unique<undo_command> ();
-
-          if (x.text == "y")
-            return make_unique<redo_command> ();
-
-          if (x.text == "c")
-            return make_unique<copy_command> ();
-
-          if (x.text == "v")
-            return make_unique<paste_command> ();
+          if (x.text == "q") return make_unique<quit_command> ();
+          if (x.text == "s") return make_unique<save_command> ();
+          if (x.text == "z") return make_unique<undo_command> ();
+          if (x.text == "y") return make_unique<redo_command> ();
+          if (x.text == "c") return make_unique<copy_command> ();
+          if (x.text == "v") return make_unique<paste_command> ();
+          if (x.text == "p") return make_unique<toggle_cmdline_command> ();
         }
 
         return make_unique<insert_text_command> (x.text);
@@ -61,31 +120,18 @@ namespace mine
         {
           // Navigation.
           //
-          case special_key::up:
-            return make_unique<move_cursor_command> (move_direction::up, s);
-
-          case special_key::down:
-            return make_unique<move_cursor_command> (move_direction::down, s);
-
-          case special_key::left:
-            return make_unique<move_cursor_command> (move_direction::left, s);
-
-          case special_key::right:
-            return make_unique<move_cursor_command> (move_direction::right, s);
+          case special_key::up:         return make_unique<move_cursor_command> (move_direction::up, s);
+          case special_key::down:       return make_unique<move_cursor_command> (move_direction::down, s);
+          case special_key::left:       return make_unique<move_cursor_command> (move_direction::left, s);
+          case special_key::right:      return make_unique<move_cursor_command> (move_direction::right, s);
 
           // Editing.
           //
-          case special_key::backspace:
-            return make_unique<delete_backward_command> ();
-
-          case special_key::delete_key:
-            return make_unique<delete_forward_command> ();
-
-          case special_key::enter:
-            return make_unique<insert_newline_command> ();
-
-          default:
-            break;
+          case special_key::backspace:  return make_unique<delete_backward_command> ();
+          case special_key::delete_key: return make_unique<delete_forward_command> ();
+          case special_key::enter:      return make_unique<insert_newline_command> ();
+          case special_key::escape:     return make_unique<escape_command> ();
+          default:                      break;
         }
       }
       // Mouse events.
@@ -146,6 +192,36 @@ namespace mine
     }, e);
   }
 
+  // Parse strings directly typed into the command line.
+  //
+  unique_ptr<command>
+  parse_cmdline (string_view action)
+  {
+    auto start (action.find_first_not_of (" \t"));
+    if (start == string_view::npos)
+      return nullptr;
+
+    auto end (action.find_last_not_of (" \t"));
+    auto trimmed (action.substr (start, end - start + 1));
+
+    if (trimmed == "w" || trimmed == "write")
+      return make_unique<save_command> ();
+
+    if (trimmed == "q" || trimmed == "quit")
+      return make_unique<quit_command> ();
+
+    if (trimmed == "wq" || trimmed == "x")
+      return make_unique<save_and_quit_command> ();
+
+    if (trimmed == "u" || trimmed == "undo")
+      return make_unique<undo_command> ();
+
+    if (trimmed == "redo")
+      return make_unique<redo_command> ();
+
+    return nullptr;
+  }
+
   mine::editor_state copy_command::
   execute (const editor_state& s) const
   {
@@ -163,7 +239,6 @@ namespace mine
       // grab the character under the cursor too.
       //
       auto e (cursor (p2).move_right (s.buffer ()).position ());
-
       std::string t (s.buffer ().get_range (p1, e));
       set_clipboard_text (t);
 
@@ -171,10 +246,8 @@ namespace mine
       // actually copied.
       //
       c.clear_mark ();
-
       return s.with_cursor (c);
     }
-
     return s;
   }
 
@@ -185,7 +258,7 @@ namespace mine
   }
 
   bool mine::copy_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
@@ -199,6 +272,17 @@ namespace mine
     std::string t (get_clipboard_text ());
     if (t.empty ())
       return s;
+
+    // Paste into cmdline if active.
+    //
+    if (s.cmdline ().active)
+    {
+      auto cmd (s.cmdline ());
+      std::erase (t, '\n'); // Prevent multi-line pastes from breaking cmdline.
+      cmd.content.insert (cmd.cursor_pos, t);
+      cmd.cursor_pos += t.size ();
+      return s.with_cmdline (cmd);
+    }
 
     auto b (s.buffer ());
     auto c (s.get_cursor ());
@@ -267,14 +351,26 @@ namespace mine
   }
 
   bool mine::paste_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state& s) const noexcept
   {
-    return true;
+    return !s.cmdline ().active;
   }
 
   editor_state delete_backward_command::
   execute (const editor_state& s) const
   {
+    if (s.cmdline ().active)
+    {
+      auto cmd (s.cmdline ());
+      if (cmd.cursor_pos > 0)
+      {
+        std::size_t prev (prev_grapheme_boundary (cmd.content, cmd.cursor_pos));
+        cmd.content.erase (prev, cmd.cursor_pos - prev);
+        cmd.cursor_pos = prev;
+      }
+      return s.with_cmdline (cmd);
+    }
+
     auto b (s.buffer ());
     auto c (s.get_cursor ());
 
@@ -331,14 +427,25 @@ namespace mine
   }
 
   bool delete_backward_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state& s) const noexcept
   {
-    return true;
+    return !s.cmdline ().active;
   }
 
   editor_state delete_forward_command::
   execute (const editor_state& s) const
   {
+    if (s.cmdline ().active)
+    {
+      auto cmd (s.cmdline ());
+      if (cmd.cursor_pos < cmd.content.size ())
+      {
+        std::size_t next (next_grapheme_boundary (cmd.content, cmd.cursor_pos));
+        cmd.content.erase (cmd.cursor_pos, next - cmd.cursor_pos);
+      }
+      return s.with_cmdline (cmd);
+    }
+
     auto b (s.buffer ());
     auto c (s.get_cursor ());
 
@@ -397,9 +504,9 @@ namespace mine
   }
 
   bool delete_forward_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state& s) const noexcept
   {
-    return true;
+    return !s.cmdline ().active;
   }
 
   insert_text_command::
@@ -411,6 +518,14 @@ namespace mine
   editor_state insert_text_command::
   execute (const editor_state& s) const
   {
+    if (s.cmdline ().active)
+    {
+      auto cmd (s.cmdline ());
+      cmd.content.insert (cmd.cursor_pos, text_);
+      cmd.cursor_pos += text_.size ();
+      return s.with_cmdline (cmd);
+    }
+
     auto b (s.buffer ());
     auto c (s.get_cursor ());
 
@@ -449,7 +564,7 @@ namespace mine
     // simply advance the column index by the number of graphemes we just
     // inserted.
     //
-     const size_t n (count_graphemes (text_));
+    const size_t n (count_graphemes (text_));
 
     c = c.move_to (
       cursor_position (c.line (), column_number (c.column ().value + n)));
@@ -464,14 +579,21 @@ namespace mine
   }
 
   bool insert_text_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state& s) const noexcept
   {
-    return true;
+    return !s.cmdline ().active;
   }
 
   editor_state insert_newline_command::
   execute (const editor_state& s) const
   {
+    if (s.cmdline ().active)
+    {
+      auto cmd (s.cmdline ());
+      cmd.is_submitted = true;
+      return s.with_cmdline (cmd);
+    }
+
     auto b (s.buffer ());
     auto c (s.get_cursor ());
 
@@ -513,9 +635,9 @@ namespace mine
   }
 
   bool insert_newline_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state& s) const noexcept
   {
-    return true;
+    return !s.cmdline ().active;
   }
 
   move_cursor_command::
@@ -528,6 +650,32 @@ namespace mine
   editor_state move_cursor_command::
   execute (const editor_state& s) const
   {
+    if (s.cmdline ().active)
+    {
+      auto cmd (s.cmdline ());
+
+      switch (d_)
+      {
+        case move_direction::left:
+          cmd.cursor_pos = prev_grapheme_boundary (cmd.content, cmd.cursor_pos);
+          break;
+        case move_direction::right:
+          cmd.cursor_pos = next_grapheme_boundary (cmd.content, cmd.cursor_pos);
+          break;
+        case move_direction::line_start:
+        case move_direction::buffer_start:
+          cmd.cursor_pos = 0;
+          break;
+        case move_direction::line_end:
+        case move_direction::buffer_end:
+          cmd.cursor_pos = cmd.content.size ();
+          break;
+        default:
+          break;
+      }
+      return s.with_cmdline (cmd);
+    }
+
     const auto& b (s.buffer ());
     const auto& c (s.get_cursor ());
 
@@ -543,7 +691,6 @@ namespace mine
       //
       auto nv (d_ == move_direction::scroll_up ? s.view ().scroll_up (3, b)
                                                : s.view ().scroll_down (3, b));
-
       return s.with_view (move (nv));
     }
 
@@ -571,40 +718,15 @@ namespace mine
 
     switch (d_)
     {
-      case move_direction::up:
-        nc = nc.move_up (b);
-        break;
-
-      case move_direction::down:
-        nc = nc.move_down (b);
-        break;
-
-      case move_direction::left:
-        nc = nc.move_left (b);
-        break;
-
-      case move_direction::right:
-        nc = nc.move_right (b);
-        break;
-
-      case move_direction::line_start:
-        nc = nc.move_line_start ();
-        break;
-
-      case move_direction::line_end:
-        nc = nc.move_line_end (b);
-        break;
-
-      case move_direction::buffer_start:
-        nc = nc.move_buffer_start ();
-        break;
-
-      case move_direction::buffer_end:
-        nc = nc.move_buffer_end (b);
-        break;
-
-      default:
-        break; // should be unreachable due to scroll check above.
+      case move_direction::up:           nc = nc.move_up (b);          break;
+      case move_direction::down:         nc = nc.move_down (b);        break;
+      case move_direction::left:         nc = nc.move_left (b);        break;
+      case move_direction::right:        nc = nc.move_right (b);       break;
+      case move_direction::line_start:   nc = nc.move_line_start ();   break;
+      case move_direction::line_end:     nc = nc.move_line_end (b);    break;
+      case move_direction::buffer_start: nc = nc.move_buffer_start (); break;
+      case move_direction::buffer_end:   nc = nc.move_buffer_end (b);  break;
+      default: break;
     }
 
     // If the move was invalid (e.g., trying to move up from the first line),
@@ -620,7 +742,43 @@ namespace mine
   }
 
   bool move_cursor_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
+  {
+    return false;
+  }
+
+  editor_state save_command::
+  execute (const editor_state& s) const
+  {
+    return s;
+  }
+
+  string_view save_command::
+  name () const noexcept
+  {
+    return "save";
+  }
+
+  bool save_command::
+  modifies_buffer (const editor_state&) const noexcept
+  {
+    return false;
+  }
+
+  editor_state save_and_quit_command::
+  execute (const editor_state& s) const
+  {
+    return s;
+  }
+
+  string_view save_and_quit_command::
+  name () const noexcept
+  {
+    return "save_and_quit";
+  }
+
+  bool save_and_quit_command::
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
@@ -640,7 +798,7 @@ namespace mine
   }
 
   bool quit_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
@@ -660,7 +818,7 @@ namespace mine
   }
 
   bool redo_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
@@ -679,7 +837,6 @@ namespace mine
     // position struct expects (row,col), which is (y,x).
     //
     screen_position sp (y_, x_);
-
     auto p (s.view ().screen_to_buffer (sp, s.buffer ()));
 
     // Grab the cursor and move it to the resolved position.
@@ -697,7 +854,7 @@ namespace mine
   }
 
   bool begin_selection_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
@@ -735,13 +892,11 @@ namespace mine
   }
 
   bool update_selection_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
 
-  // end_selection_command
-  //
   end_selection_command::
   end_selection_command (uint16_t x, uint16_t y)
     : x_ (x),
@@ -769,7 +924,7 @@ namespace mine
   }
 
   bool end_selection_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
@@ -789,7 +944,67 @@ namespace mine
   }
 
   bool undo_command::
-  modifies_buffer () const noexcept
+  modifies_buffer (const editor_state&) const noexcept
+  {
+    return false;
+  }
+
+  editor_state toggle_cmdline_command::
+  execute (const editor_state& s) const
+  {
+    auto cmd (s.cmdline ());
+    cmd.active = !cmd.active;
+
+    if (cmd.active)
+    {
+      cmd.content.clear ();
+      cmd.cursor_pos = 0;
+    }
+
+    return s.with_cmdline (cmd);
+  }
+
+  string_view toggle_cmdline_command::
+  name () const noexcept
+  {
+    return "toggle_cmdline";
+  }
+
+  bool toggle_cmdline_command::
+  modifies_buffer (const editor_state&) const noexcept
+  {
+    return false;
+  }
+
+  editor_state escape_command::
+  execute (const editor_state& s) const
+  {
+    // If the cmdline is active, pressing escape cancels it and clears it out.
+    //
+    if (s.cmdline ().active)
+    {
+      auto cmd (s.cmdline ());
+      cmd.active = false;
+      cmd.content.clear ();
+      cmd.cursor_pos = 0;
+      return s.with_cmdline (cmd);
+    }
+
+    // Otherwise, normal escape behavior (e.g., clear the selection anchor).
+    //
+    auto cur (s.get_cursor ());
+    cur.clear_mark ();
+    return s.with_cursor (cur);
+  }
+
+  string_view escape_command::
+  name () const noexcept
+  {
+    return "escape";
+  }
+
+  bool escape_command::
+  modifies_buffer (const editor_state&) const noexcept
   {
     return false;
   }
