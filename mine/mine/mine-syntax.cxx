@@ -1,12 +1,20 @@
 #include <mine/mine-syntax.hxx>
 #include <mine/mine-assert.hxx>
+#include <mine/mine-utility.hxx>
 
-#include <dlfcn.h>
+#ifdef _WIN32
+#  include <windows.h>
+#else
+#  include <dlfcn.h>
+#endif
+
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <utility>
 
 using namespace std;
+using namespace std::filesystem;
 
 namespace mine
 {
@@ -44,6 +52,21 @@ namespace mine
 
       return syntax_token_type::none;
     }
+
+    // Helper to abstract dynamic library unloading across platforms.
+    //
+    void
+    close_lib (void* handle)
+    {
+      if (!handle)
+        return;
+
+#ifdef _WIN32
+      FreeLibrary (static_cast<HMODULE> (handle));
+#else
+      dlclose (handle);
+#endif
+    }
   }
 
   // syntax_highlighter::dl_guard
@@ -52,8 +75,7 @@ namespace mine
   syntax_highlighter::dl_guard::
   ~dl_guard ()
   {
-    if (handle)
-      dlclose (handle);
+    close_lib (handle);
   }
 
   syntax_highlighter::dl_guard::
@@ -72,7 +94,7 @@ namespace mine
   operator= (dl_guard&& x) noexcept
   {
     if (handle)
-      dlclose (handle);
+      close_lib (handle);
 
     handle = exchange (x.handle, nullptr);
     return *this;
@@ -116,12 +138,28 @@ namespace mine
   void syntax_highlighter::
   init ()
   {
-    // We load the C++ parser dynamically from the Neovim path for now.
+    // We load the parser dynamically from the data path.
     //
-    // Obviously temporary hardcoded path just to wire up Tree-sitter.
-    //
-    dl_handle_ = dl_guard (
-      dlopen ("/home/wroy/.local/share/nvim/site/parser/cpp.so", RTLD_NOW));
+    string lang ("cpp"); // Hardcoded to C++ for now to wire up tree-sitter.
+
+#ifdef _WIN32
+    string ext (".dll");
+#elif defined(__APPLE__)
+    string ext (".dylib");
+#else
+    string ext (".so");
+#endif
+
+    path parser (build_install_data / "parser" / (lang + ext));
+
+#ifdef _WIN32
+    void* handle (
+      static_cast<void*> (LoadLibraryW (parser.wstring ().c_str ())));
+#else
+    void* handle (dlopen (parser.string ().c_str (), RTLD_NOW));
+#endif
+
+    dl_handle_ = dl_guard (handle);
 
     if (dl_handle_.handle == nullptr)
       return;
@@ -129,7 +167,15 @@ namespace mine
     // Resolve the entry point. The tree-sitter convention is a function
     // named tree_sitter_<language>.
     //
-    auto* sym (dlsym (dl_handle_.handle, "tree_sitter_cpp"));
+    string func_name = "tree_sitter_" + lang;
+
+#ifdef _WIN32
+    auto* sym (reinterpret_cast<void*> (
+      GetProcAddress (static_cast<HMODULE> (dl_handle_.handle),
+                      func_name.c_str ())));
+#else
+    auto* sym (dlsym (dl_handle_.handle, func_name.c_str ()));
+#endif
 
     if (sym == nullptr)
       return;
@@ -142,7 +188,8 @@ namespace mine
 
     // Load the queries from the file system.
     //
-    ifstream f ("/home/wroy/.local/share/nvim/site/queries/cpp/highlights.scm");
+    path query (build_install_data / "queries" / lang / "highlights.scm");
+    ifstream f (query);
 
     if (f)
     {
