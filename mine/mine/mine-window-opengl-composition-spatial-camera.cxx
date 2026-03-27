@@ -65,7 +65,7 @@ namespace mine
   }
 
   void camera_2d::
-  make_visible (vec2 w, float m)
+  make_visible (vec2 w, float top, float bottom, float left, float right)
   {
     // The idea here is to calculate the effective viewport size in world
     // coordinates so we know exactly how much we see at the current zoom.
@@ -76,15 +76,14 @@ namespace mine
     // Nudge the target position if the point falls outside our designated
     // margin area. We process both axes independently.
     //
-    if (w.x < t.x + m)
-      t.x = w.x - m;
-    else if (w.x > t.x + s.x - m)
-      t.x = w.x - s.x + m;
-
-    if (w.y < t.y + m)
-      t.y = w.y - m;
-    else if (w.y > t.y + s.y - m)
-      t.y = w.y - s.y + m;
+    if (w.x < t.x + left)
+      t.x = w.x - left;
+    else if (w.x > t.x + s.x - right)
+      t.x = w.x - s.x + right;
+    if (w.y < t.y + top)
+      t.y = w.y - top;
+    else if (w.y > t.y + s.y - bottom)
+      t.y = w.y - s.y + bottom;
 
     // Finally, prevent the camera from wandering into negative space.
     //

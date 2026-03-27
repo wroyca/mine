@@ -66,6 +66,12 @@ namespace mine
     screen_position
     screen_to_grid (float px, float py, const editor_state& s);
 
+    float
+    line_height () const
+    {
+      return rast_.line_height ();
+    }
+
     void
     set_text_color (const vec4& c)
     {

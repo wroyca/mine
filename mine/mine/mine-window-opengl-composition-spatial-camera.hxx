@@ -59,7 +59,7 @@ namespace mine
     clamp_scroll (float min_y, float max_y);
 
     void
-    make_visible (vec2 wp, float m);
+    make_visible (vec2 wp, float top, float bottom, float left, float right);
 
     vec2
     screen_to_world (vec2 scr) const;

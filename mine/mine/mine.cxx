@@ -423,8 +423,12 @@ namespace mine
         {
           ren_.resize (sz.first, sz.second);
 
-          screen_size v_sz (static_cast<uint16_t> (sz.second / 16),
-                            static_cast<uint16_t> (sz.first / 8));
+          float lh = ren_.line_height ();
+          if (lh <= 0.0f)
+            lh = 16.0f;
+
+          screen_size v_sz (static_cast<uint16_t> (sz.second / lh),
+                            static_cast<uint16_t> (sz.first / (lh * 0.5f)));
 
           core_.resize (v_sz);
 

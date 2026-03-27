@@ -413,17 +413,24 @@ namespace mine
       }
     }
 
-    // Track cursor with the camera if requested. This ensures the cursor stays
-    // within the viewport during typing or keyboard navigation.
+    vec2 vp (cam_.viewport ());
+
+    // Track cursor with the camera if requested.
     //
     if (track)
-      cam_.make_visible (vec2 (cx, cy), lh * 2.0f);
+      cam_.make_visible (vec2 (cx, cy),
+                         lh * 1.0f,
+                         lh * 3.0f,
+                         lh * 2.0f,
+                         lh * 2.0f);
 
-    max_sy_ = static_cast<float> (b.line_count ()) * lh;
+    max_sy_ =
+      max (0.0f,
+           static_cast<float> (b.line_count ()) * lh - (vp.y - lh * 2.0f));
+
     cam_.clamp_scroll (0.0f, max_sy_);
 
     vec2 cam (cam_.position ());
-    vec2 vp (cam_.viewport ());
     float zm (cam_.zoom ());
 
     float vh (vp.y / zm);
