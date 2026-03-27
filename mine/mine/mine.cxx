@@ -473,7 +473,7 @@ namespace mine
 
       path font_path = build_install_data / "fonts" / "regular.ttf";
 
-      if (!ren_.load_font (font_path.c_str (), 28))
+      if (!ren_.load_font (font_path.string().c_str (), 28)) // FIXME: Not valid unicode conversions on Windows
       {
         cerr << "warning: failed to load default font. text rendering disabled." << endl;
       }
