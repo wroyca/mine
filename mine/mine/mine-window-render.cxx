@@ -66,6 +66,24 @@ namespace mine
 
       return 1;
     }
+
+    // Map our semantic tokens to GUI colors.
+    //
+    static vec4
+    map_token_color (syntax_token_type t, const vec4& def)
+    {
+      switch (t)
+      {
+        case syntax_token_type::keyword:  return vec4 (0.8f, 0.4f, 0.8f, 1.0f);
+        case syntax_token_type::string:   return vec4 (0.4f, 0.8f, 0.4f, 1.0f);
+        case syntax_token_type::type:     return vec4 (0.8f, 0.8f, 0.4f, 1.0f);
+        case syntax_token_type::function: return vec4 (0.4f, 0.6f, 1.0f, 1.0f);
+        case syntax_token_type::variable: return vec4 (0.4f, 0.8f, 0.8f, 1.0f);
+        case syntax_token_type::constant: return vec4 (0.8f, 0.4f, 0.4f, 1.0f);
+        case syntax_token_type::comment:  return vec4 (0.5f, 0.5f, 0.5f, 1.0f);
+        default:                          return def;
+      }
+    }
   }
 
   window_renderer::
@@ -77,6 +95,8 @@ namespace mine
       c_sel_ (0.3f, 0.5f, 0.8f, 0.5f),
       c_bg_ (0.0f, 0.0f, 0.0f, 1.0f) // Pure black like TUI
   {
+    highlighter_.init ();
+
     bool ok (dev_.init ());
     MINE_INVARIANT (ok);
 
@@ -177,6 +197,7 @@ namespace mine
       rast_ (move (x.rast_)),
       pack_ (move (x.pack_)),
       up_ (move (x.up_)),
+      highlighter_ (move (x.highlighter_)),
       sh_txt_ (x.sh_txt_),
       sh_sld_ (x.sh_sld_),
       sh_ui_  (x.sh_ui_),
@@ -333,6 +354,8 @@ namespace mine
   void window_renderer::
   render (const editor_state& s, bool track)
   {
+    highlighter_.update (s.buffer ());
+
     dev_.clear (c_bg_.x, c_bg_.y, c_bg_.z, c_bg_.w);
 
     float lh (rast_.line_height ());
@@ -415,9 +438,8 @@ namespace mine
     float y (static_cast<float> (first) * lh);
     float asc (rast_.ascender ());
 
-    // Iterate over only the visible lines. Rendering the whole buffer every
-    // frame would tank the framerate on large files.
-    //
+    auto highlights (highlighter_.query_lines (first, last));
+
     for (size_t i (first); i < last; ++i)
     {
       // Draw the end-of-buffer tildes if we are past the last line
@@ -441,7 +463,7 @@ namespace mine
                      vec2 (x1, y1),
                      vec2 (g.uv.u0, g.uv.v0),
                      vec2 (g.uv.u1, g.uv.v1),
-                     vec4 (0.3f, 0.5f, 0.9f, 1.0f)); // Bright blue TUI color
+                     vec4 (0.3f, 0.5f, 0.9f, 1.0f));
         }
         y += lh;
         continue;
@@ -482,10 +504,22 @@ namespace mine
                        c_sel_);
           }
 
-          // Offset the glyph using its bearing metrics. The Y axis is usually
-          // baseline-oriented in font files, so we push it down by the
-          // ascender.
-          //
+          syntax_token_type token (syntax_token_type::none);
+          size_t off (it->byte_offset);
+
+          for (const auto& hl : highlights)
+          {
+            if (i > hl.start_line || (i == hl.start_line && off >= hl.start_col_byte))
+            {
+              if (i < hl.end_line || (i == hl.end_line && off < hl.end_col_byte))
+              {
+                token = hl.type;
+              }
+            }
+          }
+
+          vec4 color (map_token_color (token, c_txt_));
+
           float x0 (x + g.bx);
           float y0 (y + (asc - g.by));
           float x1 (x0 + g.w);
@@ -498,7 +532,7 @@ namespace mine
                      vec2 (x1, y1),
                      vec2 (g.uv.u0, g.uv.v0),
                      vec2 (g.uv.u1, g.uv.v1),
-                     c_txt_);
+                     color);
 
           x += g.adv;
         }
@@ -591,9 +625,9 @@ namespace mine
     // need to revisit this if status messages start containing multi-byte
     // characters.
     //
-    for (char c : cs)
+    for (char c_char : cs)
     {
-      uint32_t cp (static_cast<uint32_t> (c));
+      uint32_t cp (static_cast<uint32_t> (c_char));
       ensure_glyph (cp);
 
       auto i (gl_.find (cp));
@@ -621,13 +655,13 @@ namespace mine
     //
     if (s.cmdline ().active)
     {
-      float cx (0.0f);
+      float c_x (0.0f);
 
       // Account for the prompt character we prepended earlier so the cursor
       // does not end up inside the colon.
       //
       ensure_glyph (':');
-      cx += gl_[':'].adv;
+      c_x += gl_[':'].adv;
 
       string_view co (s.cmdline ().content);
       size_t p (s.cmdline ().cursor_pos);
@@ -645,15 +679,15 @@ namespace mine
         uint32_t cp (decode_utf8 (gs));
 
         ensure_glyph (cp);
-        cx += gl_[cp].adv;
+        c_x += gl_[cp].adv;
         i = n;
       }
 
       // Draw the cursor itself. We just push a simple colored quad for it.
       //
       push_quad (v_sld_,
-                 vec2 (cx, text_c_y),
-                 vec2 (cx + 2.0f, text_c_y + lh),
+                 vec2 (c_x, text_c_y),
+                 vec2 (c_x + 2.0f, text_c_y + lh),
                  vec2 (0.0f, 0.0f),
                  vec2 (0.0f, 0.0f),
                  c_cur_);

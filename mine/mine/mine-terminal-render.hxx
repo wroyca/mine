@@ -5,18 +5,16 @@
 
 #include <mine/mine-terminal-screen.hxx>
 #include <mine/mine-core-state.hxx>
+#include <mine/mine-syntax.hxx>
 
 namespace mine
 {
   class terminal_renderer
   {
   public:
-    terminal_renderer () = default;
+    terminal_renderer ();
 
-    explicit terminal_renderer (screen_size s)
-      : current_screen_ (s)
-    {
-    }
+    explicit terminal_renderer (screen_size s);
 
     // Main rendering entry point.
     //
@@ -60,6 +58,8 @@ namespace mine
   private:
     terminal_screen current_screen_ {screen_size (24, 80)};
     std::optional<cursor_position> last_cursor_pos_;
+
+    syntax_highlighter highlighter_;
 
     // Composition helpers.
     //
