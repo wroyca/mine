@@ -7,7 +7,7 @@ depends: * build2 >= 0.18.0-
 depends: * bpkg >= 0.18.0-
 depends: libboost-asio >= 1.87.0
 depends: libfreetype >=	2.11.1
-depends: libicui18n >= 65.1.0
+depends: libicui18n >= 74.2.0-
 depends: libimmer >= 0.8.1
 depends: lua >= 5.4.8
 depends:
