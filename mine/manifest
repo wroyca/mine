@@ -10,6 +10,7 @@ depends: libfreetype >=	2.11.1
 depends: libicui18n >= 74.2.0-
 depends: libimmer >= 0.8.1
 depends: lua >= 5.4.8
+depends: libtree-sitter
 depends:
 \
 glfw >= 3.4.0
