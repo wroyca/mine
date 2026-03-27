@@ -8,5 +8,6 @@
 #
 compile_commands.json
 
-
+# For devs who like to have the build output in the same directory
 /builds/
+/install/
