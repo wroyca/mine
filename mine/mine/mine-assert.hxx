@@ -113,3 +113,9 @@ namespace mine
 
 #define MINE_UNREACHABLE() \
   ::mine::unreachable ()
+
+#if ____cpp_deleted_function >= 202403L
+# define MINE_DELETE_WITH_REASON(message) delete (#message)
+#else
+# define MINE_DELETE_WITH_REASON(message) delete
+#endif

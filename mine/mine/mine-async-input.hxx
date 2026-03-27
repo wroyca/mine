@@ -49,16 +49,16 @@ namespace mine
     }
 
     async_input (const async_input&)
-      = delete ("async_input captures 'this' and cannot be copied");
+      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be copied");
 
     async_input (async_input&&)
-      = delete ("async_input captures 'this' and cannot be moved");
+      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be moved");
 
     async_input& operator= (const async_input&)
-      = delete ("async_input captures 'this' and cannot be copied");
+      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be copied");
 
     async_input& operator= (async_input&&)
-      = delete ("async_input captures 'this' and cannot be moved");
+      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be moved");
 
     ~async_input ()
     {
