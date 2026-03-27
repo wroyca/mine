@@ -10,9 +10,49 @@ using namespace std;
 
 namespace mine
 {
+  namespace
+  {
+    // Map our semantic tokens to standard ANSI indexed colors. We try to use
+    // bright variants where it makes sense to maintain good contrast.
+    //
+    static uint8_t
+    map_token_color (syntax_token_type t)
+    {
+      switch (t)
+      {
+        case syntax_token_type::keyword:  return 5; // Magenta
+        case syntax_token_type::string:   return 2; // Green
+        case syntax_token_type::type:     return 3; // Yellow
+        case syntax_token_type::function: return 4; // Blue
+        case syntax_token_type::variable: return 6; // Cyan
+        case syntax_token_type::constant: return 1; // Red
+        case syntax_token_type::comment:  return 8; // Bright Black (Grey)
+        default:                          return 7; // White
+      }
+    }
+  }
+
+  terminal_renderer::
+  terminal_renderer ()
+  {
+    highlighter_.init ();
+  }
+
+  terminal_renderer::
+  terminal_renderer (screen_size s)
+    : current_screen_ (s)
+  {
+    highlighter_.init ();
+  }
+
   void terminal_renderer::
   render (const editor_state& s)
   {
+    // Make sure the highlighter is up to date with the latest buffer contents
+    // before we start projecting the view onto the screen.
+    //
+    highlighter_.update (s.buffer ());
+
     // Begin synchronized update (DEC Private Mode 2026).
     //
     // This tells the terminal to buffer all output until we call
@@ -223,6 +263,13 @@ namespace mine
     uint16_t rws (sz.rows > 1 ? sz.rows - 2 : 0);
     uint16_t lim (sz.cols);
 
+    // Prepare our syntax highlights for the viewport lines so we don't query
+    // the whole tree.
+    //
+    size_t start_line (v.top ().value);
+    size_t end_line (start_line + rws);
+    auto highlights (highlighter_.query_lines (start_line, end_line));
+
     for (uint16_t r (0); r < rws; ++r)
     {
       line_number ln (v.top ().value + r);
@@ -303,12 +350,32 @@ namespace mine
 
         cursor_position cp (ln, column_number (lc));
 
-        // Exclude the cell under the cursor from explicit highlight coloring to
-        // avoid "double inversion" where the hardware cursor sits
+        // Apply our syntax highlighting based on the byte offset of the
+        // current grapheme.
         //
-        bool sel (hs && cp >= ss && cp <= se && cp != c.position ());
+        syntax_token_type token (syntax_token_type::none);
+        size_t off (i->byte_offset);
+
+        for (const auto& hl : highlights)
+        {
+          if (ln.value > hl.start_line ||
+             (ln.value == hl.start_line && off >= hl.start_col_byte))
+          {
+            if (ln.value < hl.end_line ||
+               (ln.value == hl.end_line && off < hl.end_col_byte))
+            {
+              token = hl.type;
+            }
+          }
+        }
 
         cell_attributes ca;
+        ca.fg = map_token_color (token);
+
+        // Exclude the cell under the cursor from explicit highlight coloring to
+        // avoid "double inversion" where the hardware cursor sits.
+        //
+        bool sel (hs && cp >= ss && cp <= se && cp != c.position ());
 
         if (sel)
         {

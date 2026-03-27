@@ -11,6 +11,7 @@
 #include <mine/mine-window-opengl-typography-atlas.hxx>
 #include <mine/mine-window-opengl-typography-raster.hxx>
 #include <mine/mine-window-opengl-typography-shape.hxx>
+#include <mine/mine-syntax.hxx>
 
 namespace mine
 {
@@ -115,6 +116,8 @@ namespace mine
     ft_rasterizer rast_;
     bin_packer pack_;
     texture_updater up_;
+
+    syntax_highlighter highlighter_;
 
     shader_prog_handle sh_txt_;
     shader_prog_handle sh_sld_;

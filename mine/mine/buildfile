@@ -4,6 +4,8 @@ import                       libs += libfreetype%lib{freetype}
 import                       libs += libicui18n%lib{icui18n}
 import                       libs += libimmer%lib{immer}
 import! [rule_hint=cxx.link] libs += lua%lib{lua}
+import! [rule_hint=cxx.link] libs += libtree-sitter%lib{tree-sitter}
+
 import                       libs += glfw%lib{glfw}
 
 exe{mine}: {hxx ixx txx cxx}{** -mine-version -mine-utility-*installed} \
