@@ -39,16 +39,16 @@ namespace mine
     }
 
     async_loop (const async_loop&)
-      = delete ("async_loop owns an io_context and cannot be copied");
+      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be copied");
 
     async_loop (async_loop&&)
-      = delete ("async_loop owns an io_context and cannot be moved");
+      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be moved");
 
     async_loop& operator = (const async_loop&)
-      = delete ("async_loop owns an io_context and cannot be copied");
+      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be copied");
 
     async_loop& operator = (async_loop&&)
-      = delete ("async_loop owns an io_context and cannot be moved");
+      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be moved");
 
     ~async_loop () = default;
 

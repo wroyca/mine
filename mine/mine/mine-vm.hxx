@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mine/mine-types.hxx>
+#include <mine/mine-assert.hxx>
 
 #include <functional>
 #include <memory>
@@ -105,16 +106,16 @@ namespace mine
     vm (vm_limits limits = vm_limits::default_limits ());
 
     vm (const vm&)
-      = delete ("vm manages unique execution state and hardware resources that cannot be duplicated");
+      = MINE_DELETE_WITH_REASON("vm manages unique execution state and hardware resources that cannot be duplicated");
 
     vm& operator= (const vm&)
-      = delete ("vm manages unique execution state and hardware resources that cannot be duplicated");
+      = MINE_DELETE_WITH_REASON("vm manages unique execution state and hardware resources that cannot be duplicated");
 
     vm (vm&&)
-      = delete ("vm contains internal self-references and stable memory mappings that prevent moving");
+      = MINE_DELETE_WITH_REASON("vm contains internal self-references and stable memory mappings that prevent moving");
 
     vm& operator= (vm&&)
-      = delete ("vm contains internal self-references and stable memory mappings that prevent moving");
+      = MINE_DELETE_WITH_REASON("vm contains internal self-references and stable memory mappings that prevent moving");
 
     ~vm ();
 
