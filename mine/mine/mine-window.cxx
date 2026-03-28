@@ -37,6 +37,10 @@ namespace mine
     {
       glfwSetErrorCallback (error_callback);
 
+#ifdef __linux__
+      glfwInitHint (GLFW_WAYLAND_LIBDECOR, GLFW_WAYLAND_DISABLE_LIBDECOR);
+#endif
+
       int r (glfwInit ());
       MINE_INVARIANT (r == GLFW_TRUE);
     }
@@ -47,7 +51,15 @@ namespace mine
     //
     glfwWindowHint (GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint (GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint (GLFW_DECORATED, GLFW_FALSE);
+
+    glfwWindowHint (GLFW_DECORATED,
+#ifndef __linux__
+                    GLFW_TRUE
+#else
+                    GLFW_FALSE
+#endif
+    );
+
     glfwWindowHint (GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint (GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
