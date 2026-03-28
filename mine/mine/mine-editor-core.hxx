@@ -51,8 +51,12 @@ namespace mine
       : h_ (std::move (s)),
         l_ (&l)
     {
-      // Capture 'this' so the VM can securely invoke our message display.
+      // Give the base setup a blank, fully functioning file buffer context so
+      // the initial unsaved text view isn't fundamentally broken when the user
+      // starts pressing keys.
       //
+      files_[1] = file_buffer ();
+
       print_handler_ = [this] (std::string_view msg)
       {
         show_message (std::string (msg));
@@ -127,8 +131,25 @@ namespace mine
       const auto& pre (h_.current ());
       auto post (cmd.execute (pre));
 
-      // Handle the command line submission.
-      //
+      if (cmd.name () == "close_window")
+      {
+        std::vector<window_layout> lays;
+        pre.get_layout (lays, 100, 100);
+
+        // If we only have one layout segment open, attempting to close it
+        // implies the user wants to terminate the application entirely.
+        //
+        if (lays.size () <= 1)
+        {
+          quit ();
+          return;
+        }
+
+        h_ = h_.replace_current (post);
+        notify (change_hint::view);
+        return;
+      }
+
       if (post.cmdline ().is_submitted)
       {
         std::string a (post.cmdline ().content);
@@ -189,7 +210,7 @@ namespace mine
         hint = change_hint::content;
         h_ = h_.push (std::move (post));
       }
-      else if (pre.view () != post.view ())
+      else if (pre.view () != post.view () || cmd.name () == "split_window")
       {
         // View changes (scrolling) are significant enough to warrant an
         // undo entry? Debatable. For now, yes, to allow jumping back to
@@ -198,7 +219,9 @@ namespace mine
         hint = change_hint::view;
         h_ = h_.push (std::move (post));
       }
-      else if (pre.get_cursor () != post.get_cursor () || pre.cmdline () != post.cmdline ())
+      else if (pre.get_cursor () != post.get_cursor () ||
+               pre.cmdline () != post.cmdline () ||
+               pre.active_window () != post.active_window ())
       {
         // Cursor movement or cmdline activity.
         //
@@ -316,18 +339,20 @@ namespace mine
       if (!l_)
         return;
 
-      auto [nfb, eff] (mine::load_file (fb_, path));
-      fb_ = std::move (nfb);
+      buffer_id new_id (h_.current ().next_buffer_id ());
+      auto s (h_.current ().with_new_buffer (make_empty_buffer (), path));
 
-      // Reset history when loading a completely new file.
+      // Switch the active window's underlying view target over to the newly
+      // generated buffer space context before initiating IO logic.
       //
-      auto s (h_.current ()
-              .with_buffer (fb_.content)
-              .with_modified (false));
+      s = s.switch_buffer (new_id);
 
-      h_ = history (std::move (s));
+      file_buffer fb;
+      auto[nfb, eff] (mine::load_file (std::move (fb), path));
+      files_[new_id] = std::move (nfb);
 
-      run_io (std::move (eff));
+      h_ = h_.push (std::move (s));
+      run_io (std::move (eff), new_id);
       notify (change_hint::content);
     }
 
@@ -337,23 +362,22 @@ namespace mine
       if (!l_)
         return;
 
-      // Cannot save a "new file" that hasn't been named yet.
-      //
-      if (!std::holds_alternative<existing_file> (fb_.state))
+      buffer_id active_id (h_.current ().active_buffer_id ());
+      auto& fb (files_[active_id]);
+
+      if (!std::holds_alternative<existing_file> (fb.state))
       {
         show_message ("No file name");
         return;
       }
 
-      // Sync the editor content into the file buffer before saving.
-      //
-      fb_.content = h_.current ().buffer ();
+      fb.content = h_.current ().buffer ();
 
-      auto [nfb, eff] (mine::save_file (fb_));
-      fb_ = std::move (nfb);
+      auto[nfb, eff] (mine::save_file (std::move (fb)));
+      files_[active_id] = std::move (nfb);
 
-      run_io (std::move (eff));
-      notify (change_hint::content); // To clear dirty flag visuals.
+      run_io (std::move (eff), active_id);
+      notify (change_hint::content);
     }
 
     // Queries & Callbacks
@@ -362,25 +386,29 @@ namespace mine
     bool
     dirty () const noexcept
     {
-      return fb_.is_dirty ();
+      auto it (files_.find (h_.current ().active_buffer_id ()));
+      return it != files_.end () && it->second.is_dirty ();
     }
 
     bool
     io_busy () const noexcept
     {
-      return fb_.io_in_progress ();
+      auto it (files_.find (h_.current ().active_buffer_id ()));
+      return it != files_.end () && it->second.io_in_progress ();
     }
 
     std::optional<std::string>
     filename () const noexcept
     {
-      return fb_.file_name ();
+      auto it (files_.find (h_.current ().active_buffer_id ()));
+      return it != files_.end () ? it->second.file_name () : std::nullopt;
     }
 
     std::optional<float>
     progress () const noexcept
     {
-      return fb_.progress_percent ();
+      auto it (files_.find (h_.current ().active_buffer_id ()));
+      return it != files_.end () ? it->second.progress_percent () : std::nullopt;
     }
 
     void
@@ -487,9 +515,7 @@ namespace mine
     void
     resize (screen_size s)
     {
-      auto v (h_.current ().view ().resize (s));
-      auto ns (h_.current ().with_view (std::move (v)));
-
+      auto ns (h_.current ().resize_layout (s));
       h_ = h_.replace_current (std::move (ns));
       notify (change_hint::view);
     }
@@ -505,16 +531,13 @@ namespace mine
     // Run the IO effect on the async loop.
     //
     void
-    run_io (io_effect eff)
+    run_io (io_effect eff, buffer_id id)
     {
-      // We capture 'this' safely because 'core' outlives the IO operations
-      // in the application main loop.
-      //
-      l_->post ([this, e = std::move (eff)] () mutable
+      l_->post ([this, e = std::move (eff), id] () mutable
       {
-        e ([this] (file_io_action a)
+        e ([this, id] (file_io_action a)
         {
-          this->complete_io (std::move (a));
+          this->complete_io (id, std::move (a));
         });
       });
     }
@@ -522,21 +545,20 @@ namespace mine
     // Callback from the IO thread (back on the main thread via post).
     //
     void
-    complete_io (const file_io_action& a)
+    complete_io (buffer_id id, const file_io_action& a)
     {
-      auto [nfb, msg] (update_file_buffer (fb_, a));
-      fb_ = std::move (nfb);
+      auto& fb (files_[id]);
+      auto [nfb, msg] (update_file_buffer (std::move (fb), a));
+      fb = std::move (nfb);
 
-      // If the IO operation resulted in new content (e.g., a load finished),
-      // update the editor state.
-      //
-      if (fb_.content != h_.current ().buffer ())
+      if (fb.content != h_.current ().get_buffer (id).content)
       {
-        auto s (h_.current ()
-                .with_buffer (fb_.content)
-                .with_modified (false));
+        auto s (h_.current ().update_buffer (id, fb.content));
 
-        h_ = history (std::move (s));
+        // We push onto history here because asynchronous IO stream events that
+        // alter memory represent hard content transitions to the user.
+        //
+        h_ = h_.push (std::move (s));
         notify (change_hint::content);
       }
 
@@ -548,7 +570,8 @@ namespace mine
 
   private:
     history h_;
-    file_buffer fb_;
+    std::map<buffer_id, file_buffer> files_;
+
     async_loop* l_;
     vm vm_ {vm_limits::permissive()};
     std::map<input_event, std::string> keymaps_;

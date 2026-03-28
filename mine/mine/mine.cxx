@@ -66,10 +66,9 @@ namespace mine
     extern "C" void
     abort_handler (int s)
     {
-      // The "Last Gasp".
-      //
-      // If we are here, the ship is sinking. We try to restore the terminal
-      // first so the error message is actually readable.
+      // If we are aborting, try to restore the terminal back to cooked mode
+      // so the user can actually read the crash dump and their shell isn't
+      // completely hosed.
       //
       if (g_raw != nullptr)
       {
@@ -112,15 +111,16 @@ namespace mine
     }
   }
 
-  // The Application Context (Terminal)
+  // The application context for the terminal backend.
+  //
+  // We wrap the Boost.Asio event loop and wire up the terminal I/O streams
+  // directly to the core editor logic.
   //
   class terminal_editor_app
   {
   public:
     terminal_editor_app ()
     {
-      // Hook the global for emergency cleanup.
-      //
       g_raw = &raw_;
       init ();
     }
@@ -192,6 +192,7 @@ namespace mine
       // Shutdown sequence.
       //
       input_->stop ();
+
 #ifndef _WIN32
       if (winch_)
         winch_->cancel ();
@@ -316,9 +317,7 @@ namespace mine
           auto s (get_terminal_size ());
           if (s)
           {
-            // Figure out if the dimensions actually changed.
-            //
-            bool c (!last_term_sz_);
+            bool c (!last_term_sz_ || *last_term_sz_ != *s);
 
             if (c)
             {
@@ -351,10 +350,8 @@ namespace mine
     async_loop  loop_;
     editor_core core_ {loop_};
 
-    // RAII guard for raw mode.
-    //
-    // MUST be declared before UI components so it destructs *last* (restoring
-    // the terminal only after we stop printing).
+    // Keep this declared before UI components so it restores the terminal
+    // state as the very last step during destruction.
     //
     terminal_raw_mode raw_;
 
@@ -365,7 +362,7 @@ namespace mine
     unique_ptr<boost::asio::signal_set> winch_;
 #else
     unique_ptr<boost::asio::steady_timer> winch_timer_;
-    decltype(get_terminal_size()) last_term_sz_;
+    std::optional<screen_size> last_term_sz_;
 #endif
 
     string file_;
@@ -462,6 +459,8 @@ namespace mine
         }
         else
         {
+          // Rest the CPU a bit if we aren't actively painting anything.
+          //
           std::this_thread::sleep_for (std::chrono::milliseconds (8));
         }
       }
@@ -519,7 +518,7 @@ namespace mine
         [this] (const input_event& e) { handle_input (e); },
         [this] (double x, double y)
         {
-          ren_.scroll (static_cast<float> (x), static_cast<float> (y));
+          ren_.scroll (static_cast<float> (x), static_cast<float> (y), core_.current ());
           dirty_ = true;
         },
         [this] (double x, double y, mouse_state st, key_modifier mod)

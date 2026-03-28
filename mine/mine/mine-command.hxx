@@ -409,4 +409,56 @@ namespace mine
     [[nodiscard]] bool
     modifies_buffer (const editor_state& s) const noexcept override;
   };
+
+  class split_window_command : public command
+  {
+  public:
+    explicit
+    split_window_command (split_dir d);
+
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
+
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
+
+    [[nodiscard]] bool
+    modifies_buffer (const editor_state& s) const noexcept override;
+
+  private:
+    split_dir d_;
+  };
+
+  class switch_window_command : public command
+  {
+  public:
+    explicit
+    switch_window_command (int dx, int dy);
+
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
+
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
+
+    [[nodiscard]] bool
+    modifies_buffer (const editor_state& s) const noexcept override;
+
+  private:
+    int dx_;
+    int dy_;
+  };
+
+  class close_window_command : public command
+  {
+  public:
+    [[nodiscard]] editor_state
+    execute (const editor_state& s) const override;
+
+    [[nodiscard]] std::string_view
+    name () const noexcept override;
+
+    [[nodiscard]] bool
+    modifies_buffer (const editor_state& s) const noexcept override;
+  };
 }

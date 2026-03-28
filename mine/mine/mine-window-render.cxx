@@ -32,14 +32,11 @@ namespace mine
       //
       if ((c & 0xE0) == 0xC0 && s.size () >= 2)
         return ((c & 0x1F) << 6) | (s[1] & 0x3F);
-
       if ((c & 0xF0) == 0xE0 && s.size () >= 3)
         return ((c & 0x0F) << 12) | ((s[1] & 0x3F) << 6) | (s[2] & 0x3F);
-
       if ((c & 0xF8) == 0xF0 && s.size () >= 4)
         return ((c & 0x07) << 18) | ((s[1] & 0x3F) << 12) |
           ((s[2] & 0x3F) << 6) | (s[3] & 0x3F);
-
       return 0;
     }
 
@@ -70,7 +67,7 @@ namespace mine
     // Map our semantic tokens to GUI colors.
     //
     static vec4
-    map_token_color (syntax_token_type t, const vec4& def)
+    map_token_color (syntax_token_type t, const vec4& d)
     {
       switch (t)
       {
@@ -81,7 +78,7 @@ namespace mine
         case syntax_token_type::variable: return vec4 (0.4f, 0.8f, 0.8f, 1.0f);
         case syntax_token_type::constant: return vec4 (0.8f, 0.4f, 0.4f, 1.0f);
         case syntax_token_type::comment:  return vec4 (0.5f, 0.5f, 0.5f, 1.0f);
-        default:                          return def;
+        default:                          return d;
       }
     }
   }
@@ -93,7 +90,7 @@ namespace mine
       c_txt_ (1.0f, 1.0f, 1.0f, 1.0f),
       c_cur_ (1.0f, 1.0f, 1.0f, 1.0f),
       c_sel_ (0.3f, 0.5f, 0.8f, 0.5f),
-      c_bg_ (0.0f, 0.0f, 0.0f, 1.0f) // Pure black like TUI
+      c_bg_ (0.0f, 0.0f, 0.0f, 1.0f)
   {
     highlighter_.init ();
 
@@ -101,8 +98,9 @@ namespace mine
     MINE_INVARIANT (ok);
 
     sh_txt_ = dev_.create_shader (shaders::text_vertex, shaders::text_fragment);
-    sh_sld_ = dev_.create_shader (shaders::text_vertex, shaders::solid_fragment);
-    sh_ui_  = dev_.create_shader (shaders::ui_vertex,   shaders::ui_fragment);
+    sh_sld_ =
+      dev_.create_shader (shaders::text_vertex, shaders::solid_fragment);
+    sh_ui_ = dev_.create_shader (shaders::ui_vertex, shaders::ui_fragment);
 
     MINE_INVARIANT (sh_txt_.valid ());
     MINE_INVARIANT (sh_sld_.valid ());
@@ -113,7 +111,7 @@ namespace mine
     // for a standard editor view without needing reallocation.
     //
     size_t mb (65536 * sizeof (text_vertex));
-    size_t ui_mb (4096 * sizeof (ui_vertex));
+    size_t ub (4096 * sizeof (ui_vertex));
 
     vbo_txt_ = dev_.create_vbo (mb, nullptr, buffer_usage::dynamic_draw);
     vao_txt_ = dev_.create_vao ();
@@ -132,21 +130,21 @@ namespace mine
     vao_sld_ = dev_.create_vao ();
     dev_.configure_vao (vao_sld_, vbo_sld_, a);
 
-    // Setup UI primitives buffers
+    // Setup UI primitives buffers.
     //
-    vbo_ui_ = dev_.create_vbo (ui_mb, nullptr, buffer_usage::dynamic_draw);
+    vbo_ui_ = dev_.create_vbo (ub, nullptr, buffer_usage::dynamic_draw);
     vao_ui_ = dev_.create_vao ();
 
-    vertex_attr ui_a[] {
+    vertex_attr ua[] {
       {0, 2, sizeof (ui_vertex), offsetof (ui_vertex, p), false},
       {1, 2, sizeof (ui_vertex), offsetof (ui_vertex, uv), false},
       {2, 4, sizeof (ui_vertex), offsetof (ui_vertex, c), false},
       {3, 2, sizeof (ui_vertex), offsetof (ui_vertex, dim), false},
       {4, 1, sizeof (ui_vertex), offsetof (ui_vertex, radius), false}};
 
-    dev_.configure_vao (vao_ui_, vbo_ui_, ui_a);
+    dev_.configure_vao (vao_ui_, vbo_ui_, ua);
 
-    // Setup UI text buffers (using the standard text format)
+    // Setup UI text buffers (using the standard text format).
     //
     vbo_ui_txt_ = dev_.create_vbo (mb, nullptr, buffer_usage::dynamic_draw);
     vao_ui_txt_ = dev_.create_vao ();
@@ -193,33 +191,34 @@ namespace mine
   window_renderer::
   window_renderer (window_renderer&& x) noexcept
     : dev_ (move (x.dev_)),
-      cam_ (move (x.cam_)),
+      cams_ (move (x.cams_)),
       rast_ (move (x.rast_)),
       pack_ (move (x.pack_)),
       up_ (move (x.up_)),
       highlighter_ (move (x.highlighter_)),
       sh_txt_ (x.sh_txt_),
       sh_sld_ (x.sh_sld_),
-      sh_ui_  (x.sh_ui_),
+      sh_ui_ (x.sh_ui_),
       vao_txt_ (x.vao_txt_),
       vbo_txt_ (x.vbo_txt_),
       vao_sld_ (x.vao_sld_),
       vbo_sld_ (x.vbo_sld_),
-      vao_ui_  (x.vao_ui_),
-      vbo_ui_  (x.vbo_ui_),
+      vao_ui_ (x.vao_ui_),
+      vbo_ui_ (x.vbo_ui_),
       vao_ui_txt_ (x.vao_ui_txt_),
       vbo_ui_txt_ (x.vbo_ui_txt_),
       tex_atl_ (x.tex_atl_),
       gl_ (move (x.gl_)),
       v_txt_ (move (x.v_txt_)),
       v_sld_ (move (x.v_sld_)),
-      v_ui_  (move (x.v_ui_)),
+      v_ui_ (move (x.v_ui_)),
       v_ui_txt_ (move (x.v_ui_txt_)),
       c_txt_ (x.c_txt_),
       c_cur_ (x.c_cur_),
       c_sel_ (x.c_sel_),
       c_bg_ (x.c_bg_),
-      max_sy_ (x.max_sy_)
+      screen_w_ (x.screen_w_),
+      screen_h_ (x.screen_h_)
   {
     // Reset the moved-from handles so we don't double-free on destruction. The
     // device wrapper expects handles to be cleanly invalidated.
@@ -269,7 +268,6 @@ namespace mine
     // skipping it. Something to fix later.
     //
     auto bmp (rast_.rasterize (cp));
-
     if (!bmp)
       return;
 
@@ -277,7 +275,6 @@ namespace mine
     // avoid texture bleeding when the GPU samples with linear filtering.
     //
     auto r (pack_.pack (bmp->w + 2, bmp->h + 2));
-
     if (!r)
       return;
 
@@ -317,20 +314,20 @@ namespace mine
   push_quad (vector<text_vertex>& v,
              const vec2& p0,
              const vec2& p1,
-             const vec2& uv0,
-             const vec2& uv1,
+             const vec2& t0,
+             const vec2& t1,
              const vec4& c)
   {
     // Emit two triangles to form a quad. Standard counter-clockwise winding
     // so backface culling doesn't chew them up if we ever turn it on.
     //
-    v.push_back (text_vertex {vec2 (p0.x, p0.y), vec2 (uv0.x, uv0.y), c});
-    v.push_back (text_vertex {vec2 (p1.x, p0.y), vec2 (uv1.x, uv0.y), c});
-    v.push_back (text_vertex {vec2 (p0.x, p1.y), vec2 (uv0.x, uv1.y), c});
+    v.push_back (text_vertex {vec2 (p0.x, p0.y), vec2 (t0.x, t0.y), c});
+    v.push_back (text_vertex {vec2 (p1.x, p0.y), vec2 (t1.x, t0.y), c});
+    v.push_back (text_vertex {vec2 (p0.x, p1.y), vec2 (t0.x, t1.y), c});
 
-    v.push_back (text_vertex {vec2 (p1.x, p0.y), vec2 (uv1.x, uv0.y), c});
-    v.push_back (text_vertex {vec2 (p1.x, p1.y), vec2 (uv1.x, uv1.y), c});
-    v.push_back (text_vertex {vec2 (p0.x, p1.y), vec2 (uv0.x, uv1.y), c});
+    v.push_back (text_vertex {vec2 (p1.x, p0.y), vec2 (t1.x, t0.y), c});
+    v.push_back (text_vertex {vec2 (p1.x, p1.y), vec2 (t1.x, t1.y), c});
+    v.push_back (text_vertex {vec2 (p0.x, p1.y), vec2 (t0.x, t1.y), c});
   }
 
   void window_renderer::
@@ -338,23 +335,43 @@ namespace mine
                 const vec2& p0,
                 const vec2& p1,
                 const vec4& c,
-                float radius)
+                float r)
   {
-    vec2 dim (p1.x - p0.x, p1.y - p0.y);
+    vec2 d (p1.x - p0.x, p1.y - p0.y);
+    v.push_back (
+      ui_vertex {vec2 (p0.x, p0.y), vec2 (0.0f, 0.0f), c, d, r});
+    v.push_back (
+      ui_vertex {vec2 (p1.x, p0.y), vec2 (1.0f, 0.0f), c, d, r});
+    v.push_back (
+      ui_vertex {vec2 (p0.x, p1.y), vec2 (0.0f, 1.0f), c, d, r});
 
-    v.push_back (ui_vertex {vec2 (p0.x, p0.y), vec2 (0.0f, 0.0f), c, dim, radius});
-    v.push_back (ui_vertex {vec2 (p1.x, p0.y), vec2 (1.0f, 0.0f), c, dim, radius});
-    v.push_back (ui_vertex {vec2 (p0.x, p1.y), vec2 (0.0f, 1.0f), c, dim, radius});
-
-    v.push_back (ui_vertex {vec2 (p1.x, p0.y), vec2 (1.0f, 0.0f), c, dim, radius});
-    v.push_back (ui_vertex {vec2 (p1.x, p1.y), vec2 (1.0f, 1.0f), c, dim, radius});
-    v.push_back (ui_vertex {vec2 (p0.x, p1.y), vec2 (0.0f, 1.0f), c, dim, radius});
+    v.push_back (
+      ui_vertex {vec2 (p1.x, p0.y), vec2 (1.0f, 0.0f), c, d, r});
+    v.push_back (
+      ui_vertex {vec2 (p1.x, p1.y), vec2 (1.0f, 1.0f), c, d, r});
+    v.push_back (
+      ui_vertex {vec2 (p0.x, p1.y), vec2 (0.0f, 1.0f), c, d, r});
   }
 
   void window_renderer::
-  render (const editor_state& s, bool track)
+  render (const editor_state& s, bool tk)
   {
     highlighter_.update (s.buffer ());
+
+    vector<window_id> tr;
+    for (const auto& [id, cam] : cams_)
+    {
+      try
+      {
+        s.get_window (id);
+      }
+      catch (...)
+      {
+        tr.push_back (id);
+      }
+    }
+    for (auto id : tr)
+      cams_.erase (id);
 
     dev_.clear (c_bg_.x, c_bg_.y, c_bg_.z, c_bg_.w);
 
@@ -366,258 +383,402 @@ namespace mine
     if (lh <= 0.0f)
       return;
 
-    v_txt_.clear ();
-    v_sld_.clear ();
     v_ui_.clear ();
     v_ui_txt_.clear ();
 
-    const auto& b (s.buffer ());
-    const auto& c (s.get_cursor ());
+    uint16_t lw (static_cast<uint16_t> (screen_w_ / (lh * 0.5f)));
+    uint16_t lh_g (static_cast<uint16_t> ((screen_h_ - lh) / lh));
 
-    // Figure out our selection boundaries. If the cursor has an active mark, we
-    // need to sort the start and end positions so our sweep logic works
-    // regardless of which direction the user dragged.
+    vector<window_layout> lays;
+    s.get_layout (lays, lw, lh_g);
+
+    // Dynamically query max layout dimensions so we don't depend on the layout
+    // engine filling the hypothetical grid up to 'lw' and 'lh_g'.
     //
-    bool hs (c.has_mark ());
-    cursor_position ss (c.position ());
-    cursor_position se (c.position ());
-
-    if (hs)
+    uint16_t mr (0), mb (0);
+    for (const auto& lay : lays)
     {
-      ss = min (c.mark (), c.position ());
-      se = max (c.mark (), c.position ());
+      mr = max (mr, static_cast<uint16_t> (lay.x + lay.w));
+      mb = max (mb, static_cast<uint16_t> (lay.y + lay.h));
     }
 
-    // Calculate the physical cursor coordinates. We have to walk the graphemes
-    // on the cursor's line to sum up their advances, because variable-width
-    // fonts mean we can't just multiply column * average_width.
-    //
-    float cx (0.0f);
-    float cy (static_cast<float> (c.line ().value) * lh);
-
-    if (c.column ().value > 0)
+    for (const auto& lay : lays)
     {
-      const auto& l (b.line_at (c.line ()));
-      auto txt (l.view ());
-      const auto& seg (l.idx.get_segmentation ());
-      auto rng (make_grapheme_range (seg));
+      v_txt_.clear ();
+      v_sld_.clear ();
 
-      size_t target (c.column ().value);
+      const auto& ws (s.get_window (lay.win));
+      const auto& bs (s.get_buffer (ws.buf));
+      bool act (lay.win == s.active_window ());
 
-      for (auto it (rng.begin ()); it != rng.end () && target > 0;
-           ++it, --target)
-      {
-        uint32_t cp (decode_utf8 (it->text (txt)));
-        ensure_glyph (cp);
-        cx += gl_[cp].adv;
-      }
-    }
+      auto& cam (cams_[lay.win]);
 
-    vec2 vp (cam_.viewport ());
+      float f_px (static_cast<float> (lay.x) * (lh * 0.5f));
+      float f_py (static_cast<float> (lay.y) * lh);
+      float f_pw (static_cast<float> (lay.w) * (lh * 0.5f));
+      float f_ph (static_cast<float> (lay.h) * lh);
 
-    // Track cursor with the camera if requested.
-    //
-    if (track)
-      cam_.make_visible (vec2 (cx, cy),
-                         lh * 1.0f,
-                         lh * 3.0f,
-                         lh * 2.0f,
-                         lh * 2.0f);
+      bool rm (lay.x + lay.w == mr);
+      bool bm (lay.y + lay.h == mb);
 
-    max_sy_ =
-      max (0.0f,
-           static_cast<float> (b.line_count ()) * lh - (vp.y - lh * 2.0f));
+      float dw (rm ? max (f_pw, screen_w_ - f_px) : f_pw);
+      float dh (bm ? max (f_ph, screen_h_ - lh - f_py) : f_ph);
 
-    cam_.clamp_scroll (0.0f, max_sy_);
+      int px (static_cast<int> (f_px));
+      int py (static_cast<int> (f_py));
+      int pw (static_cast<int> (dw));
+      int ph (static_cast<int> (dh));
 
-    vec2 cam (cam_.position ());
-    float zm (cam_.zoom ());
+      int tph (max (0, ph - static_cast<int> (lh)));
 
-    float vh (vp.y / zm);
+      cam.set_viewport (
+        vec2 (static_cast<float> (pw), static_cast<float> (tph)));
 
-    // Calculate the visible range of lines based on the camera viewport. We pad
-    // the end by a couple of lines to prevent glyphs from popping into
-    // existence as they scroll over the bottom edge.
-    //
-    size_t first (static_cast<size_t> (max (0.0f, cam.y / lh)));
-    size_t last (static_cast<size_t> ((cam.y + vh) / lh) + 2);
+      int gy (static_cast<int> (screen_h_) - py - tph);
+      dev_.set_viewport (px, gy, pw, tph);
+      dev_.set_scissor (px, gy, pw, tph);
+      dev_.set_scissor_enabled (true);
 
-    float y (static_cast<float> (first) * lh);
-    float asc (rast_.ascender ());
+      const auto& b (bs.content);
+      const auto& c (ws.cur);
 
-    auto highlights (highlighter_.query_lines (first, last));
-
-    // Iterate over only the visible lines. Rendering the whole buffer every
-    // frame would tank the framerate on large files.
-    //
-    for (size_t i (first); i < last; ++i)
-    {
-      // Draw the end-of-buffer tildes if we are past the last line
+      // Figure out our selection boundaries. If the cursor has an active mark,
+      // we need to sort the start and end positions so our sweep logic works
+      // regardless of which direction the user dragged.
       //
-      if (i >= b.line_count ())
+      bool hs (c.has_mark ());
+      cursor_position ss (c.position ());
+      cursor_position se (c.position ());
+
+      if (hs)
       {
-        uint32_t cp = '~';
-        ensure_glyph (cp);
-
-        auto g_it = gl_.find (cp);
-        if (g_it != gl_.end ())
-        {
-          const auto& g = g_it->second;
-          float x0 = g.bx;
-          float y0 = y + (asc - g.by);
-          float x1 = x0 + g.w;
-          float y1 = y0 + g.h;
-
-          push_quad (v_txt_,
-                     vec2 (x0, y0),
-                     vec2 (x1, y1),
-                     vec2 (g.uv.u0, g.uv.v0),
-                     vec2 (g.uv.u1, g.uv.v1),
-                     vec4 (0.3f, 0.5f, 0.9f, 1.0f));
-        }
-        y += lh;
-        continue;
+        ss = min (c.mark (), c.position ());
+        se = max (c.mark (), c.position ());
       }
 
-      const auto& l (b.line_at (line_number (i)));
-      auto txt (l.view ());
-      const auto& seg (l.idx.get_segmentation ());
-      auto rng (make_grapheme_range (seg));
+      // Calculate the physical cursor coordinates. We have to walk the
+      // graphemes on the cursor's line to sum up their advances, because
+      // variable-width fonts mean we can't just multiply column *
+      // average_width.
+      //
+      float cx (0.0f);
+      float cy (static_cast<float> (c.line ().value) * lh);
 
-      float x (0.0f);
-      size_t lcol (0);
-
-      for (auto it (rng.begin ()); it != rng.end (); ++it, ++lcol)
+      if (c.column ().value > 0)
       {
-        uint32_t cp (decode_utf8 (it->text (txt)));
-        ensure_glyph (cp);
+        const auto& l (b.line_at (c.line ()));
+        auto txt (l.view ());
+        const auto& seg (l.idx.get_segmentation ());
+        auto rng (make_grapheme_range (seg));
 
-        auto g_it (gl_.find (cp));
+        size_t tg (c.column ().value);
 
-        if (g_it != gl_.end ())
+        for (auto it (rng.begin ()); it != rng.end () && tg > 0;
+             ++it, --tg)
         {
-          const auto& g (g_it->second);
+          uint32_t cp (decode_utf8 (it->text (txt)));
+          ensure_glyph (cp);
+          cx += gl_[cp].adv;
+        }
+      }
 
-          cursor_position cur {line_number (i), column_number (lcol)};
+      if (tk && act)
+      {
+        // Set bottom margin to 0.0f. If the camera internally calculates
+        // margins natively relative to item bounds, 0.0f prevents it from
+        // padding early.
+        //
+        cam.make_visible (vec2 (cx, cy), lh * 1.0f, lh * 3.0f, lh * 2.0f, 0.0f);
+      }
 
-          // Draw the selection background if this grapheme falls within the
-          // highlighted range. We skip the exact cursor position so the cursor
-          // block itself remains distinct.
+      float max_sy (
+        max (0.0f, static_cast<float> (b.line_count ()) * lh - tph));
+      cam.clamp_scroll (0.0f, max_sy);
+
+      vec2 cp (cam.position ());
+      float zm (cam.zoom ());
+      float vh (tph / zm);
+
+      // Calculate the visible range of lines based on the camera viewport. We
+      // pad the end by a couple of lines to prevent glyphs from popping into
+      // existence as they scroll over the bottom edge.
+      //
+      size_t fst (static_cast<size_t> (max (0.0f, cp.y / lh)));
+      size_t lst (static_cast<size_t> ((cp.y + vh) / lh) + 2);
+
+      float y (static_cast<float> (fst) * lh);
+      float asc (rast_.ascender ());
+
+      auto hls (highlighter_.query_lines (fst, lst));
+
+      // Iterate over only the visible lines. Rendering the whole buffer every
+      // frame would tank the framerate on large files.
+      //
+      for (size_t i (fst); i < lst; ++i)
+      {
+        if (i >= b.line_count ())
+        {
+          // Draw the end-of-buffer tildes if we are past the last line.
           //
-          if (hs && cur >= ss && cur <= se && cur != c.position ())
+          uint32_t ch ('~');
+          ensure_glyph (ch);
+
+          auto gi (gl_.find (ch));
+          if (gi != gl_.end ())
           {
-            push_quad (v_sld_,
-                       vec2 (x, y),
-                       vec2 (x + g.adv, y + lh),
-                       vec2 (0.0f, 0.0f),
-                       vec2 (0.0f, 0.0f),
-                       c_sel_);
+            const auto& g (gi->second);
+            float x0 (g.bx);
+            float y0 (y + (asc - g.by));
+            float x1 (x0 + g.w);
+            float y1 (y0 + g.h);
+
+            push_quad (v_txt_,
+                       vec2 (x0, y0),
+                       vec2 (x1, y1),
+                       vec2 (g.uv.u0, g.uv.v0),
+                       vec2 (g.uv.u1, g.uv.v1),
+                       vec4 (0.3f, 0.5f, 0.9f, 1.0f));
           }
+          y += lh;
+          continue;
+        }
 
-          // Offset the glyph using its bearing metrics. The Y axis is usually
-          // baseline-oriented in font files, so we push it down by the
-          // ascender.
-          //
-          syntax_token_type token (syntax_token_type::none);
-          size_t off (it->byte_offset);
+        const auto& l (b.line_at (line_number (i)));
+        auto txt (l.view ());
+        const auto& seg (l.idx.get_segmentation ());
+        auto rng (make_grapheme_range (seg));
 
-          for (const auto& hl : highlights)
+        float x (0.0f);
+        size_t lcol (0);
+
+        for (auto it (rng.begin ()); it != rng.end (); ++it, ++lcol)
+        {
+          uint32_t ch (decode_utf8 (it->text (txt)));
+          ensure_glyph (ch);
+
+          auto gi (gl_.find (ch));
+
+          if (gi != gl_.end ())
           {
-            if (i > hl.start_line || (i == hl.start_line && off >= hl.start_col_byte))
+            const auto& g (gi->second);
+            cursor_position cur {line_number (i), column_number (lcol)};
+
+            // Draw the selection background if this grapheme falls within the
+            // highlighted range. We skip the exact cursor position so the
+            // cursor block itself remains distinct.
+            //
+            if (hs && cur >= ss && cur <= se && cur != c.position ())
             {
-              if (i < hl.end_line || (i == hl.end_line && off < hl.end_col_byte))
+              push_quad (v_sld_,
+                         vec2 (x, y),
+                         vec2 (x + g.adv, y + lh),
+                         vec2 (0.0f, 0.0f),
+                         vec2 (0.0f, 0.0f),
+                         c_sel_);
+            }
+
+            syntax_token_type tk (syntax_token_type::none);
+            size_t off (it->byte_offset);
+
+            for (const auto& hl : hls)
+            {
+              if (i > hl.start_line ||
+                  (i == hl.start_line && off >= hl.start_col_byte))
               {
-                token = hl.type;
+                if (i < hl.end_line ||
+                    (i == hl.end_line && off < hl.end_col_byte))
+                  tk = hl.type;
               }
             }
+
+            vec4 clr (map_token_color (tk, c_txt_));
+
+            // Offset the glyph using its bearing metrics. The Y axis is usually
+            // baseline-oriented in font files, so we push it down by the
+            // ascender.
+            //
+            float x0 (x + g.bx);
+            float y0 (y + (asc - g.by));
+            float x1 (x0 + g.w);
+            float y1 (y0 + g.h);
+
+            // Emit the actual text glyph geometry to the text buffer.
+            //
+            push_quad (v_txt_,
+                       vec2 (x0, y0),
+                       vec2 (x1, y1),
+                       vec2 (g.uv.u0, g.uv.v0),
+                       vec2 (g.uv.u1, g.uv.v1),
+                       (hs && cur >= ss && cur <= se && cur != c.position ())
+                         ? c_bg_
+                         : clr);
+
+            x += g.adv;
           }
-
-          vec4 color (map_token_color (token, c_txt_));
-
-          float x0 (x + g.bx);
-          float y0 (y + (asc - g.by));
-          float x1 (x0 + g.w);
-          float y1 (y0 + g.h);
-
-          // Emit the actual text glyph geometry to the text buffer.
-          //
-          push_quad (v_txt_,
-                     vec2 (x0, y0),
-                     vec2 (x1, y1),
-                     vec2 (g.uv.u0, g.uv.v0),
-                     vec2 (g.uv.u1, g.uv.v1),
-                     color);
-
-          x += g.adv;
         }
+        y += lh;
       }
-      y += lh;
+
+      int row (static_cast<int> (c.line ().value - fst));
+
+      // Draw the cursor block, but only if it currently sits inside the visible
+      // screen region.
+      //
+      if (act && row >= 0 && row < static_cast<int> (lst - fst))
+      {
+        push_quad (v_sld_,
+                   vec2 (cx, cy),
+                   vec2 (cx + 2.0f, cy + lh),
+                   vec2 (0.0f, 0.0f),
+                   vec2 (0.0f, 0.0f),
+                   c_cur_);
+      }
+
+      if (up_.is_dirty ())
+      {
+        auto r (up_.flush ());
+        if (!r.data.empty ())
+          dev_.update_tex (tex_atl_,
+                           r.r.x,
+                           r.r.y,
+                           r.r.w,
+                           r.r.h,
+                           r.data.data (),
+                           texture_format::r8);
+      }
+
+      // Setup standard alpha blending for the rendering passes. We rely on
+      // pre-multiplied alpha or standard source-over depending on how the text
+      // shader is written.
+      //
+      dev_.set_blend_enabled (true);
+      dev_.set_blend_func (blend_factor::src_alpha,
+                           blend_factor::one_minus_src_alpha,
+                           blend_factor::one,
+                           blend_factor::one_minus_src_alpha);
+
+      mat4 p_mat (cam.view_projection ());
+
+      // Dispatch solid geometry first (selections, cursor) so the text is drawn
+      // on top of it.
+      //
+      // World-space passes.
+      //
+      if (!v_sld_.empty ())
+      {
+        size_t sz (v_sld_.size () * sizeof (text_vertex));
+        dev_.update_vbo (vbo_sld_, 0, sz, v_sld_.data ());
+
+        dev_.bind_shader (sh_sld_);
+        dev_.set_uniform_mat4 (sh_sld_, "u_projection", p_mat.data ());
+        dev_.bind_vao (vao_sld_);
+        dev_.draw_arrays (primitive_topology::triangles,
+                          0,
+                          static_cast<uint32_t> (v_sld_.size ()));
+      }
+
+      // Dispatch the text atlas geometry second.
+      //
+      if (!v_txt_.empty ())
+      {
+        size_t sz (v_txt_.size () * sizeof (text_vertex));
+        dev_.update_vbo (vbo_txt_, 0, sz, v_txt_.data ());
+
+        dev_.bind_shader (sh_txt_);
+        dev_.set_uniform_mat4 (sh_txt_, "u_projection", p_mat.data ());
+        dev_.set_uniform (sh_txt_, "u_atlas", 0);
+
+        dev_.bind_tex (tex_atl_, 0);
+        dev_.bind_vao (vao_txt_);
+        dev_.draw_arrays (primitive_topology::triangles,
+                          0,
+                          static_cast<uint32_t> (v_txt_.size ()));
+      }
     }
 
-    int row (static_cast<int> (c.line ().value - first));
-
-    // Draw the cursor block, but only if it currently sits inside the visible
-    // screen region.
+    // Render global command line and UI panels.
     //
-    if (row >= 0 && row < static_cast<int> (last - first))
-    {
-      push_quad (v_sld_,
-                 vec2 (cx, cy),
-                 vec2 (cx + 2.0f, cy + lh),
-                 vec2 (0.0f, 0.0f),
-                 vec2 (0.0f, 0.0f),
-                 c_cur_);
-    }
+    dev_.set_viewport (0,
+                       0,
+                       static_cast<int> (screen_w_),
+                       static_cast<int> (screen_h_));
+    dev_.set_scissor_enabled (false);
 
-    // UI Panels (Status Line and Cmdline)
-    //
-    float ui_h = lh * 2.0f;
-    float ui_w = vp.x;
-    float ui_x = 0.0f;
-    float ui_y = vp.y - ui_h;
+    float uh (lh);
+    float uw (screen_w_);
+    float ux (0.0f);
+    float uy (screen_h_ - uh);
 
     push_ui_quad (v_ui_,
-                  vec2 (ui_x, ui_y),
-                  vec2 (ui_x + ui_w, ui_y + lh),
-                  vec4 (0.7f, 0.7f, 0.7f, 1.0f),
-                  0.0f);
-
-    push_ui_quad (v_ui_,
-                  vec2 (ui_x, ui_y + lh),
-                  vec2 (ui_x + ui_w, ui_y + ui_h),
+                  vec2 (ux, uy),
+                  vec2 (ux + uw, uy + uh),
                   vec4 (0.1f, 0.1f, 0.1f, 1.0f),
                   0.0f);
 
-    string st = " Line " + to_string (c.line ().value + 1) +
-                ", Col " + to_string (c.column ().value + 1);
-
-    if (s.modified ())
-      st += " [Modified]";
-
-    float tx = 0.0f;
-    float text_y = ui_y;
-
-    for (char ch : st)
+    for (const auto& lay : lays)
     {
-      uint32_t cp = static_cast<uint32_t> (ch);
-      ensure_glyph (cp);
+      const auto& ws (s.get_window (lay.win));
+      const auto& bs (s.get_buffer (ws.buf));
+      bool act (lay.win == s.active_window ());
 
-      auto git = gl_.find (cp);
-      if (git != gl_.end ())
+      float px (static_cast<float> (lay.x) * (lh * 0.5f));
+      float py (static_cast<float> (lay.y) * lh);
+      float pw (static_cast<float> (lay.w) * (lh * 0.5f));
+      float ph (static_cast<float> (lay.h) * lh);
+
+      bool rm (lay.x + lay.w == mr);
+      bool bm (lay.y + lay.h == mb);
+
+      float dw (rm ? max (pw, screen_w_ - px) : pw);
+      float dh (bm ? max (ph, screen_h_ - lh - py) : ph);
+
+      float ty (py + dh - lh);
+
+      vec4 bg (act ? vec4 (0.7f, 0.7f, 0.7f, 1.0f)
+                   : vec4 (0.3f, 0.3f, 0.3f, 1.0f));
+      vec4 tc (act ? vec4 (0.0f, 0.0f, 0.0f, 1.0f)
+                   : vec4 (0.7f, 0.7f, 0.7f, 1.0f));
+
+      push_ui_quad (v_ui_,
+                    vec2 (px, ty),
+                    vec2 (px + dw, ty + lh),
+                    bg,
+                    0.0f);
+
+      string st (" Line " + to_string (ws.cur.line ().value + 1) + ", Col " +
+                 to_string (ws.cur.column ().value + 1));
+      if (bs.modified)
+        st += " [Modified]";
+
+      float tx (px);
+      float asc (rast_.ascender ());
+
+      for (char ch : st)
       {
-        const auto& g = git->second;
-        float x0 = tx + g.bx;
-        float y0 = text_y + (asc - g.by);
-        float x1 = x0 + g.w;
-        float y1 = y0 + g.h;
+        uint32_t cp (static_cast<uint32_t> (ch));
+        ensure_glyph (cp);
 
-        push_quad (v_ui_txt_,
-                   vec2 (x0, y0),
-                   vec2 (x1, y1),
-                   vec2 (g.uv.u0, g.uv.v0),
-                   vec2 (g.uv.u1, g.uv.v1),
-                   vec4 (0.0f, 0.0f, 0.0f, 1.0f)); // Black text
-        tx += g.adv;
+        auto gi (gl_.find (cp));
+        if (gi != gl_.end ())
+        {
+          const auto& g (gi->second);
+
+          if (tx + g.adv > px + dw)
+            break;
+
+          float x0 (tx + g.bx);
+          float y0 (ty + (asc - g.by));
+          float x1 (x0 + g.w);
+          float y1 (y0 + g.h);
+
+          push_quad (v_ui_txt_,
+                     vec2 (x0, y0),
+                     vec2 (x1, y1),
+                     vec2 (g.uv.u0, g.uv.v0),
+                     vec2 (g.uv.u1, g.uv.v1),
+                     tc);
+          tx += g.adv;
+        }
       }
     }
 
@@ -625,12 +786,12 @@ namespace mine
     // we prefix it with a colon to act as a prompt. Otherwise, we just fall
     // back to the status message.
     //
-    string cs (s.cmdline ().active
-               ? ":" + s.cmdline ().content
-               : s.cmdline ().message);
+    string cs (s.cmdline ().active ? ":" + s.cmdline ().content
+                                   : s.cmdline ().message);
 
-    float text_c_x (0.0f);
-    float text_c_y (ui_y + lh);
+    float cx (0.0f);
+    float cy (uy);
+    float asc (rast_.ascender ());
 
     // Render the command or message text.
     //
@@ -649,8 +810,8 @@ namespace mine
       {
         const auto& g (i->second);
 
-        float x0 (text_c_x + g.bx);
-        float y0 (text_c_y + (asc - g.by));
+        float x0 (cx + g.bx);
+        float y0 (cy + (asc - g.by));
         float x1 (x0 + g.w);
         float y1 (y0 + g.h);
 
@@ -661,21 +822,21 @@ namespace mine
                    vec2 (g.uv.u1, g.uv.v1),
                    vec4 (1.0f, 1.0f, 1.0f, 1.0f));
 
-        text_c_x += g.adv;
+        cx += g.adv;
       }
     }
 
-    // Now deal with the cursor, but only if the user is actually text_c_yping.
+    // Now deal with the cursor, but only if the user is actually typing.
     //
     if (s.cmdline ().active)
     {
-      float c_x (0.0f);
+      float cur_x (0.0f);
 
       // Account for the prompt character we prepended earlier so the cursor
       // does not end up inside the colon.
       //
       ensure_glyph (':');
-      c_x += gl_[':'].adv;
+      cur_x += gl_[':'].adv;
 
       string_view co (s.cmdline ().content);
       size_t p (s.cmdline ().cursor_pos);
@@ -693,88 +854,20 @@ namespace mine
         uint32_t cp (decode_utf8 (gs));
 
         ensure_glyph (cp);
-        c_x += gl_[cp].adv;
+        cur_x += gl_[cp].adv;
         i = n;
       }
 
       // Draw the cursor itself. We just push a simple colored quad for it.
       //
-      push_quad (v_sld_,
-                 vec2 (c_x, text_c_y),
-                 vec2 (c_x + 2.0f, text_c_y + lh),
-                 vec2 (0.0f, 0.0f),
-                 vec2 (0.0f, 0.0f),
-                 c_cur_);
+      push_ui_quad (v_ui_,
+                    vec2 (cur_x, uy),
+                    vec2 (cur_x + 2.0f, uy + lh),
+                    c_cur_,
+                    0.0f);
     }
 
-    if (up_.is_dirty ())
-    {
-      auto r (up_.flush ());
-
-      if (!r.data.empty ())
-      {
-        dev_.update_tex (tex_atl_,
-                         r.r.x,
-                         r.r.y,
-                         r.r.w,
-                         r.r.h,
-                         r.data.data (),
-                         texture_format::r8);
-      }
-    }
-
-    // Setup standard alpha blending for the rendering passes. We rely on
-    // pre-multiplied alpha or standard source-over depending on how the
-    // text shader is written.
-    //
-    dev_.set_blend_enabled (true);
-    dev_.set_blend_func (blend_factor::src_alpha,
-                         blend_factor::one_minus_src_alpha,
-                         blend_factor::one,
-                         blend_factor::one_minus_src_alpha);
-
-    mat4 proj (cam_.view_projection ());
-
-    // Dispatch solid geometry first (selections, cursor) so the text is drawn
-    // on top of it.
-    //
-    // World-space passes
-    //
-    if (!v_sld_.empty ())
-    {
-      size_t sz (v_sld_.size () * sizeof (text_vertex));
-      dev_.update_vbo (vbo_sld_, 0, sz, v_sld_.data ());
-
-      dev_.bind_shader (sh_sld_);
-      dev_.set_uniform_mat4 (sh_sld_, "u_projection", proj.data ());
-
-      dev_.bind_vao (vao_sld_);
-      dev_.draw_arrays (primitive_topology::triangles,
-                        0,
-                        static_cast<uint32_t> (v_sld_.size ()));
-    }
-
-    // Dispatch the text atlas geometry second.
-    //
-    if (!v_txt_.empty ())
-    {
-      size_t sz (v_txt_.size () * sizeof (text_vertex));
-      dev_.update_vbo (vbo_txt_, 0, sz, v_txt_.data ());
-
-      dev_.bind_shader (sh_txt_);
-      dev_.set_uniform_mat4 (sh_txt_, "u_projection", proj.data ());
-      dev_.set_uniform (sh_txt_, "u_atlas", 0);
-
-      dev_.bind_tex (tex_atl_, 0);
-      dev_.bind_vao (vao_txt_);
-      dev_.draw_arrays (primitive_topology::triangles,
-                        0,
-                        static_cast<uint32_t> (v_txt_.size ()));
-    }
-
-    // Screen-space (UI) passes
-    //
-    mat4 screen_proj = mat4::ortho (0.0f, vp.x, vp.y, 0.0f, -1.0f, 1.0f);
+    mat4 sp (mat4::ortho (0.0f, screen_w_, screen_h_, 0.0f, -1.0f, 1.0f));
 
     if (!v_ui_.empty ())
     {
@@ -782,7 +875,7 @@ namespace mine
       dev_.update_vbo (vbo_ui_, 0, sz, v_ui_.data ());
 
       dev_.bind_shader (sh_ui_);
-      dev_.set_uniform_mat4 (sh_ui_, "u_projection", screen_proj.data ());
+      dev_.set_uniform_mat4 (sh_ui_, "u_projection", sp.data ());
 
       dev_.bind_vao (vao_ui_);
       dev_.draw_arrays (primitive_topology::triangles,
@@ -796,7 +889,7 @@ namespace mine
       dev_.update_vbo (vbo_ui_txt_, 0, sz, v_ui_txt_.data ());
 
       dev_.bind_shader (sh_txt_);
-      dev_.set_uniform_mat4 (sh_txt_, "u_projection", screen_proj.data ());
+      dev_.set_uniform_mat4 (sh_txt_, "u_projection", sp.data ());
       dev_.set_uniform (sh_txt_, "u_atlas", 0);
 
       dev_.bind_tex (tex_atl_, 0);
@@ -810,12 +903,11 @@ namespace mine
   void window_renderer::
   resize (int w, int h)
   {
-    MINE_PRECONDITION (w >= 0 && h >= 0);
-
-    // Propagate the new dimensions to the camera for matrix calculation and to
-    // the graphics device for the viewport scissor.
+    // Propagate the new dimensions to the graphics device for the viewport
+    // scissor.
     //
-    cam_.set_viewport (vec2 (static_cast<float> (w), static_cast<float> (h)));
+    screen_w_ = static_cast<float> (w);
+    screen_h_ = static_cast<float> (h);
     dev_.set_viewport (0, 0, w, h);
   }
 
@@ -824,11 +916,12 @@ namespace mine
   {
     // Tick the camera to progress any active smooth scrolling animations.
     //
-    cam_.update (dt);
+    for (auto& [id, cam] : cams_)
+      cam.update (dt);
   }
 
   void window_renderer::
-  scroll (float dx, float dy)
+  scroll (float dx, float dy, const editor_state& s)
   {
     float lh (rast_.line_height ());
 
@@ -837,71 +930,147 @@ namespace mine
     //
     float m (lh * 3.0f);
 
-    cam_.scroll_smooth (vec2 (-dx * m, -dy * m));
-    cam_.clamp_scroll (0.0f, max_sy_);
+    auto it (cams_.find (s.active_window ()));
+    if (it != cams_.end ())
+    {
+      it->second.scroll_smooth (vec2 (-dx * m, -dy * m));
+
+      uint16_t lw (static_cast<uint16_t> (screen_w_ / (lh * 0.5f)));
+      uint16_t lh_g (static_cast<uint16_t> ((screen_h_ - lh) / lh));
+
+      vector<window_layout> lays;
+      s.get_layout (lays, lw, lh_g);
+
+      uint16_t mb (0);
+      for (const auto& lay : lays)
+        mb = max (mb, static_cast<uint16_t> (lay.y + lay.h));
+
+      for (const auto& lay : lays)
+      {
+        if (lay.win == s.active_window ())
+        {
+          const auto& ws (s.get_window (lay.win));
+          const auto& bs (s.get_buffer (ws.buf));
+
+          float py (static_cast<float> (lay.y) * lh);
+          float ph (static_cast<float> (lay.h) * lh);
+
+          bool bm (lay.y + lay.h == mb);
+          float dh (bm ? max (ph, screen_h_ - lh - py) : ph);
+
+          float tph (max (0.0f, dh - lh));
+          float ms (
+            max (0.0f,
+                 static_cast<float> (bs.content.line_count ()) * lh - tph));
+
+          it->second.clamp_scroll (0.0f, ms);
+          break;
+        }
+      }
+    }
   }
 
   bool window_renderer::
   is_animating () const
   {
-    return cam_.is_animating ();
+    for (const auto& [id, cam] : cams_)
+      if (cam.is_animating ())
+        return true;
+
+    return false;
   }
 
   screen_position window_renderer::
   screen_to_grid (float px, float py, const editor_state& s)
   {
     float lh (rast_.line_height ());
-
     if (lh <= 0.0f)
       return screen_position (0, 0);
 
-    // Convert raw screen coordinates (like a mouse click) into world space to
-    // account for camera scroll and zoom.
-    //
-    vec2 w (cam_.screen_to_world (vec2 (px, py)));
+    uint16_t lw (static_cast<uint16_t> (screen_w_ / (lh * 0.5f)));
+    uint16_t lh_g (static_cast<uint16_t> ((screen_h_ - lh) / lh));
 
-    const auto& b (s.buffer ());
-    if (b.line_count () == 0)
-      return screen_position (0, 0);
+    vector<window_layout> lays;
+    s.get_layout (lays, lw, lh_g);
 
-    // Clamp to valid line indices to avoid out-of-bounds access if the user
-    // clicks past the end of the file.
-    //
-    int l (static_cast<int> (w.y / lh));
-    l = max (0, min (l, static_cast<int> (b.line_count () - 1)));
-
-    const auto& ln (b.line_at (line_number (l)));
-    auto txt (ln.view ());
-    const auto& seg (ln.idx.get_segmentation ());
-    auto rng (make_grapheme_range (seg));
-
-    float cx (0.0f);
-    uint16_t tc (0);
-
-    // Walk the graphemes horizontally to find the column that corresponds to
-    // the click's X coordinate.
-    //
-    for (auto it (rng.begin ()); it != rng.end (); ++it)
+    uint16_t mr (0), mb (0);
+    for (const auto& lay : lays)
     {
-      uint32_t cp (decode_utf8 (it->text (txt)));
-      ensure_glyph (cp);
-
-      auto git (gl_.find (cp));
-      float adv (git != gl_.end () ? git->second.adv : 8.0f);
-
-      // Stop searching if we crossed the midpoint of this character. This makes
-      // the cursor naturally snap to the closest side of the glyph.
-      //
-      if (w.x < cx + adv * 0.5f)
-        break;
-
-      cx += adv;
-
-      int gw (estimate_width (it->text (txt)));
-      tc += static_cast<uint16_t> (gw > 0 ? gw : 1);
+      mr = max (mr, static_cast<uint16_t> (lay.x + lay.w));
+      mb = max (mb, static_cast<uint16_t> (lay.y + lay.h));
     }
 
-    int row (l - static_cast<int> (s.view ().top ().value));
-    return screen_position (static_cast<uint16_t> (max (0, row)), tc);
+    for (const auto& lay : lays)
+    {
+      float wx (static_cast<float> (lay.x) * (lh * 0.5f));
+      float wy (static_cast<float> (lay.y) * lh);
+      float ww (static_cast<float> (lay.w) * (lh * 0.5f));
+      float wh (static_cast<float> (lay.h) * lh);
+
+      bool rm (lay.x + lay.w == mr);
+      bool bm (lay.y + lay.h == mb);
+
+      float dw (rm ? max (ww, screen_w_ - wx) : ww);
+      float dh (bm ? max (wh, screen_h_ - lh - wy) : wh);
+
+      if (px >= wx && px <= wx + dw && py >= wy && py <= wy + dh)
+      {
+        auto it (cams_.find (lay.win));
+        if (it == cams_.end ())
+          continue;
+
+        // Convert raw screen coordinates (like a mouse click) into world space
+        // to account for camera scroll and zoom.
+        //
+        vec2 w (it->second.screen_to_world (vec2 (px - wx, py - wy)));
+
+        const auto& b (s.get_buffer (s.get_window (lay.win).buf).content);
+        if (b.line_count () == 0)
+          return screen_position (lay.y, lay.x);
+
+        // Clamp to valid line indices to avoid out-of-bounds access if the user
+        // clicks past the end of the file.
+        //
+        int l (static_cast<int> (w.y / lh));
+        l = max (0, min (l, static_cast<int> (b.line_count () - 1)));
+
+        const auto& ln (b.line_at (line_number (l)));
+        auto txt (ln.view ());
+        const auto& seg (ln.idx.get_segmentation ());
+        auto rng (make_grapheme_range (seg));
+
+        float cx (0.0f);
+        uint16_t tc (0);
+
+        // Walk the graphemes horizontally to find the column that corresponds
+        // to the click's X coordinate.
+        //
+        for (auto git (rng.begin ()); git != rng.end (); ++git)
+        {
+          uint32_t cp (decode_utf8 (git->text (txt)));
+          ensure_glyph (cp);
+
+          auto gi (gl_.find (cp));
+          float adv (gi != gl_.end () ? gi->second.adv : 8.0f);
+
+          // Stop searching if we crossed the midpoint of this character. This
+          // makes the cursor naturally snap to the closest side of the glyph.
+          //
+          if (w.x < cx + adv * 0.5f)
+            break;
+
+          cx += adv;
+
+          int gw (estimate_width (git->text (txt)));
+          tc += static_cast<uint16_t> (gw > 0 ? gw : 1);
+        }
+
+        int row (l - static_cast<int> (s.get_window (lay.win).vw.top ().value));
+        return screen_position (lay.y + static_cast<uint16_t> (max (0, row)),
+                                lay.x + tc);
+      }
+    }
+
+    return screen_position (0, 0);
   }
 }

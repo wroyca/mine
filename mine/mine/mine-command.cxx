@@ -39,37 +39,44 @@ namespace mine
     if (key == "pagedown")                    return special_key_event {special_key::page_down, mods};
 
     if (!key.empty())
-      return text_input_event {std::string(key), mods};
+      return text_input_event {string(key), mods};
 
-    return std::nullopt;
+    return nullopt;
   }
 
   unique_ptr<command>
   make_command_by_name (string_view name)
   {
-    if (name == "insert_newline")    return make_unique<insert_newline_command> ();
-    if (name == "delete_backward")   return make_unique<delete_backward_command> ();
-    if (name == "delete_forward")    return make_unique<delete_forward_command> ();
-    if (name == "move_up")           return make_unique<move_cursor_command> (move_direction::up);
-    if (name == "move_down")         return make_unique<move_cursor_command> (move_direction::down);
-    if (name == "move_left")         return make_unique<move_cursor_command> (move_direction::left);
-    if (name == "move_right")        return make_unique<move_cursor_command> (move_direction::right);
-    if (name == "move_line_start")   return make_unique<move_cursor_command> (move_direction::line_start);
-    if (name == "move_line_end")     return make_unique<move_cursor_command> (move_direction::line_end);
-    if (name == "move_buffer_start") return make_unique<move_cursor_command> (move_direction::buffer_start);
-    if (name == "move_buffer_end")   return make_unique<move_cursor_command> (move_direction::buffer_end);
-    if (name == "undo")              return make_unique<undo_command> ();
-    if (name == "redo")              return make_unique<redo_command> ();
-    if (name == "save")              return make_unique<save_command> ();
-    if (name == "quit")              return make_unique<quit_command> ();
-    if (name == "save_and_quit")     return make_unique<save_and_quit_command> ();
-    if (name == "copy")              return make_unique<copy_command> ();
-    if (name == "paste")             return make_unique<paste_command> ();
-    if (name == "toggle_cmdline")    return make_unique<toggle_cmdline_command> ();
-    if (name == "escape")            return make_unique<escape_command> ();
+    if (name == "insert_newline")      return make_unique<insert_newline_command> ();
+    if (name == "delete_backward")     return make_unique<delete_backward_command> ();
+    if (name == "delete_forward")      return make_unique<delete_forward_command> ();
+    if (name == "move_up")             return make_unique<move_cursor_command> (move_direction::up);
+    if (name == "move_down")           return make_unique<move_cursor_command> (move_direction::down);
+    if (name == "move_left")           return make_unique<move_cursor_command> (move_direction::left);
+    if (name == "move_right")          return make_unique<move_cursor_command> (move_direction::right);
+    if (name == "move_line_start")     return make_unique<move_cursor_command> (move_direction::line_start);
+    if (name == "move_line_end")       return make_unique<move_cursor_command> (move_direction::line_end);
+    if (name == "move_buffer_start")   return make_unique<move_cursor_command> (move_direction::buffer_start);
+    if (name == "move_buffer_end")     return make_unique<move_cursor_command> (move_direction::buffer_end);
+    if (name == "undo")                return make_unique<undo_command> ();
+    if (name == "redo")                return make_unique<redo_command> ();
+    if (name == "save")                return make_unique<save_command> ();
+    if (name == "quit")                return make_unique<quit_command> ();
+    if (name == "save_and_quit")       return make_unique<save_and_quit_command> ();
+    if (name == "copy")                return make_unique<copy_command> ();
+    if (name == "paste")               return make_unique<paste_command> ();
+    if (name == "toggle_cmdline")      return make_unique<toggle_cmdline_command> ();
+    if (name == "escape")              return make_unique<escape_command> ();
+    if (name == "split_horizontal")    return make_unique<split_window_command> (split_dir::horizontal);
+    if (name == "split_vertical")      return make_unique<split_window_command> (split_dir::vertical);
+    if (name == "close_window")        return make_unique<close_window_command> ();
+    if (name == "switch_window_up")    return make_unique<switch_window_command> (0, -1);
+    if (name == "switch_window_down")  return make_unique<switch_window_command> (0, 1);
+    if (name == "switch_window_left")  return make_unique<switch_window_command> (-1, 0);
+    if (name == "switch_window_right") return make_unique<switch_window_command> (1, 0);
 
     if (name.starts_with ("insert_text "))
-      return make_unique<insert_text_command> (std::string (name.substr(12)));
+      return make_unique<insert_text_command> (string (name.substr(12)));
 
     return nullptr;
   }
@@ -208,7 +215,8 @@ namespace mine
       return make_unique<save_command> ();
 
     if (trimmed == "q" || trimmed == "quit")
-      return make_unique<quit_command> ();
+      return make_unique<close_window_command> (); // Remapped specifically for
+                                                   // splits
 
     if (trimmed == "wq" || trimmed == "x")
       return make_unique<save_and_quit_command> ();
@@ -218,6 +226,12 @@ namespace mine
 
     if (trimmed == "redo")
       return make_unique<redo_command> ();
+
+    if (trimmed == "sp" || trimmed == "split")
+      return make_unique<split_window_command> (split_dir::horizontal);
+
+    if (trimmed == "vs" || trimmed == "vsplit")
+      return make_unique<split_window_command> (split_dir::vertical);
 
     return nullptr;
   }
@@ -232,14 +246,14 @@ namespace mine
     //
     if (c.has_mark () && c.mark () != c.position ())
     {
-      auto p1 (std::min (c.position (), c.mark ()));
-      auto p2 (std::max (c.position (), c.mark ()));
+      auto p1 (min (c.position (), c.mark ()));
+      auto p2 (max (c.position (), c.mark ()));
 
       // Step the end forward. Cell highlighting is inclusive so we need to
       // grab the character under the cursor too.
       //
       auto e (cursor (p2).move_right (s.buffer ()).position ());
-      std::string t (s.buffer ().get_range (p1, e));
+      string t (s.buffer ().get_range (p1, e));
       set_clipboard_text (t);
 
       // Clear the mark. This gives the user visual feedback that the text was
@@ -251,7 +265,7 @@ namespace mine
     return s;
   }
 
-  std::string_view mine::copy_command::
+  string_view mine::copy_command::
   name () const noexcept
   {
     return "copy";
@@ -269,7 +283,7 @@ namespace mine
     // Grab the clipboard text. Bail out early if there is nothing
     // to do.
     //
-    std::string t (get_clipboard_text ());
+    string t (get_clipboard_text ());
     if (t.empty ())
       return s;
 
@@ -278,7 +292,7 @@ namespace mine
     if (s.cmdline ().active)
     {
       auto cmd (s.cmdline ());
-      std::erase (t, '\n'); // Prevent multi-line pastes from breaking cmdline.
+      erase (t, '\n'); // Prevent multi-line pastes from breaking cmdline.
       cmd.content.insert (cmd.cursor_pos, t);
       cmd.cursor_pos += t.size ();
       return s.with_cmdline (cmd);
@@ -292,8 +306,8 @@ namespace mine
     //
     if (c.has_mark () && c.mark () != c.position ())
     {
-      auto p1 (std::min (c.position (), c.mark ()));
-      auto p2 (std::max (c.position (), c.mark ()));
+      auto p1 (min (c.position (), c.mark ()));
+      auto p2 (max (c.position (), c.mark ()));
       auto e (cursor (p2).move_right (b).position ());
 
       b = b.delete_range (p1, e);
@@ -305,17 +319,17 @@ namespace mine
     // Shovel the clipboard text into the buffer. We have to be careful here
     // and handle newlines manually since the text might span multiple lines.
     //
-    std::size_t st (0);
-    std::size_t p (t.find ('\n'));
+    size_t st (0);
+    size_t p (t.find ('\n'));
 
-    while (p != std::string::npos)
+    while (p != string::npos)
     {
-      std::string ck (t.substr (st, p - st));
+      string ck (t.substr (st, p - st));
 
       if (!ck.empty ())
       {
         b = b.insert_graphemes (c.position (), ck);
-        std::size_t n (count_graphemes (ck));
+        size_t n (count_graphemes (ck));
 
         c = c.move_to (
           cursor_position (c.line (), column_number (c.column ().value + n)));
@@ -333,18 +347,18 @@ namespace mine
     //
     if (st < t.size ())
     {
-      std::string ck (t.substr (st));
+      string ck (t.substr (st));
       b = b.insert_graphemes (c.position (), ck);
-      std::size_t n (count_graphemes (ck));
+      size_t n (count_graphemes (ck));
 
       c = c.move_to (
         cursor_position (c.line (), column_number (c.column ().value + n)));
     }
 
-    return s.update (std::move (b), c);
+    return s.update (move (b), c);
   }
 
-  std::string_view mine::paste_command::
+  string_view mine::paste_command::
   name () const noexcept
   {
     return "paste";
@@ -364,7 +378,7 @@ namespace mine
       auto cmd (s.cmdline ());
       if (cmd.cursor_pos > 0)
       {
-        std::size_t prev (prev_grapheme_boundary (cmd.content, cmd.cursor_pos));
+        size_t prev (prev_grapheme_boundary (cmd.content, cmd.cursor_pos));
         cmd.content.erase (prev, cmd.cursor_pos - prev);
         cmd.cursor_pos = prev;
       }
@@ -440,7 +454,7 @@ namespace mine
       auto cmd (s.cmdline ());
       if (cmd.cursor_pos < cmd.content.size ())
       {
-        std::size_t next (next_grapheme_boundary (cmd.content, cmd.cursor_pos));
+        size_t next (next_grapheme_boundary (cmd.content, cmd.cursor_pos));
         cmd.content.erase (cmd.cursor_pos, next - cmd.cursor_pos);
       }
       return s.with_cmdline (cmd);
@@ -833,18 +847,51 @@ namespace mine
   editor_state begin_selection_command::
   execute (const editor_state& s) const
   {
-    // Terminals typically report coordinates as (x,y), but our screen
-    // position struct expects (row,col), which is (y,x).
-    //
-    screen_position sp (y_, x_);
-    auto p (s.view ().screen_to_buffer (sp, s.buffer ()));
+    vector<window_layout> lays;
+    s.get_layout (lays,
+                  s.global_size ().cols,
+                  s.global_size ().rows > 0 ? s.global_size ().rows - 1 : 0);
 
-    // Grab the cursor and move it to the resolved position.
-    //
-    auto c (s.get_cursor ().move_to (p));
-    c.set_mark ();
+    window_id hit (s.active_window ());
+    const window_layout* lay (nullptr);
 
-    return s.with_cursor (c);
+    // Resolve which specific split physically received the mouse click so
+    // we accurately map the coordinate space into the corresponding buffer.
+    //
+    for (const auto& l : lays)
+    {
+      if (x_ >= l.x && x_ < l.x + l.w && y_ >= l.y && y_ < l.y + l.h)
+      {
+        hit = l.win;
+        lay = &l;
+        break;
+      }
+    }
+
+    auto ns (s.switch_window_direct (hit));
+
+    if (!lay)
+    {
+      for (const auto& l : lays)
+      {
+        if (l.win == hit)
+        {
+          lay = &l;
+          break;
+        }
+      }
+    }
+
+    if (lay)
+    {
+      screen_position sp (y_ - lay->y, x_ - lay->x);
+      auto p (ns.view ().screen_to_buffer (sp, ns.buffer ()));
+      auto c (ns.get_cursor ().move_to (p));
+      c.set_mark ();
+      return ns.with_cursor (c);
+    }
+
+    return ns;
   }
 
   string_view begin_selection_command::
@@ -869,20 +916,33 @@ namespace mine
   editor_state update_selection_command::
   execute (const editor_state& s) const
   {
-    screen_position sp (y_, x_);
+    vector<window_layout> lays;
+    s.get_layout (lays,
+                  s.global_size ().cols,
+                  s.global_size ().rows > 0 ? s.global_size ().rows - 1 : 0);
 
-    // Again, use the view instance from the state to resolve the drag
-    // coordinates.
-    //
-    auto p (s.view ().screen_to_buffer (sp, s.buffer ()));
+    const window_layout* lay (nullptr);
 
-    // Move the active cursor point to the new drag coordinates. Since we
-    // previously called set_mark() during begin_selection, moving the cursor
-    // here automatically expands or shrinks the selected region.
-    //
-    auto c (s.get_cursor ().move_to (p));
+    for (const auto& l : lays)
+    {
+      if (l.win == s.active_window ())
+      {
+        lay = &l;
+        break;
+      }
+    }
 
-    return s.with_cursor (c);
+    if (lay)
+    {
+      screen_position sp (y_ > lay->y ? y_ - lay->y : 0,
+                          x_ > lay->x ? x_ - lay->x : 0);
+
+      auto p (s.view ().screen_to_buffer (sp, s.buffer ()));
+      auto c (s.get_cursor ().move_to (p));
+      return s.with_cursor (c);
+    }
+
+    return s;
   }
 
   string_view update_selection_command::
@@ -1004,6 +1064,73 @@ namespace mine
   }
 
   bool escape_command::
+  modifies_buffer (const editor_state&) const noexcept
+  {
+    return false;
+  }
+
+  split_window_command::
+  split_window_command (split_dir d)
+    : d_ (d)
+  {
+  }
+
+  editor_state split_window_command::
+  execute (const editor_state& s) const
+  {
+    return s.split_active_window (d_);
+  }
+
+  string_view split_window_command::
+  name () const noexcept
+  {
+    return "split_window";
+  }
+
+  bool split_window_command::
+  modifies_buffer (const editor_state&) const noexcept
+  {
+    return false;
+  }
+
+  switch_window_command::
+  switch_window_command (int dx, int dy)
+    : dx_ (dx),
+      dy_ (dy)
+  {
+  }
+
+  editor_state switch_window_command::
+  execute (const editor_state& s) const
+  {
+    return s.switch_window (dx_, dy_);
+  }
+
+  string_view switch_window_command::
+  name () const noexcept
+  {
+    return "switch_window";
+  }
+
+  bool switch_window_command::
+  modifies_buffer (const editor_state&) const noexcept
+  {
+    return false;
+  }
+
+  editor_state close_window_command::
+  execute (const editor_state& s) const
+  {
+    return s.close_active_window ();
+  }
+
+  string_view close_window_command::
+  name () const noexcept
+  {
+    return "close_window";
+  }
+
+  bool close_window_command::
   modifies_buffer (const editor_state&) const noexcept
   {
     return false;

@@ -14,7 +14,8 @@ namespace mine
   public:
     terminal_renderer ();
 
-    explicit terminal_renderer (screen_size s);
+    explicit
+    terminal_renderer (screen_size s);
 
     // Main rendering entry point.
     //
@@ -68,9 +69,6 @@ namespace mine
 
     void
     draw_buffer (terminal_screen_builder& screen, const editor_state& state) const;
-
-    void
-    draw_status_line (terminal_screen_builder& screen, const editor_state& state) const;
 
     void
     draw_cmdline (terminal_screen_builder& screen, const editor_state& state) const;

@@ -15,10 +15,6 @@ namespace mine
   // buffer. It maps the infinite vertical space of the buffer (line numbers)
   // to the fixed physical rows of the terminal screen.
   //
-  // Note that this is purely about vertical scrolling (lines). We don't
-  // currently handle horizontal scrolling (columns) here because we wrap
-  // lines.
-  //
   // Like the rest of the core, this is immutable. A scroll operation doesn't
   // change the view in-place; it returns a new view instance.
   //
@@ -51,15 +47,11 @@ namespace mine
     std::size_t
     height () const noexcept
     {
-      // Reserve two row at the bottom for the status line and one for the
-      // cmdline.
+      // Reserve one row at the bottom of the window for its status line.
+      // The global cmdline is handled by the layout manager independently
+      // at the very bottom of the screen.
       //
-      // @@ TODO: Hardcoding this deduction here is architecturally suspicious.
-      // Ideally, the "screen size" passed to us should be the *content* area
-      // size, calculated by the parent window manager, rather than us knowing
-      // about UI chrome. But it works for now.
-      //
-      return sz_.rows > 1 ? sz_.rows - 2 : 0;
+      return sz_.rows > 1 ? sz_.rows - 1 : 0;
     }
 
     // Coordinate Mapping

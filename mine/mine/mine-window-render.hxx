@@ -56,7 +56,7 @@ namespace mine
     update (float dt);
 
     void
-    scroll (float dx, float dy);
+    scroll (float dx, float dy, const editor_state& s);
 
     bool
     is_animating () const;
@@ -73,28 +73,16 @@ namespace mine
     }
 
     void
-    set_text_color (const vec4& c)
-    {
-      c_txt_ = c;
-    }
+    set_text_color (const vec4& c) { c_txt_ = c; }
 
     void
-    set_cursor_color (const vec4& c)
-    {
-      c_cur_ = c;
-    }
+    set_cursor_color (const vec4& c) { c_cur_ = c; }
 
     void
-    set_selection_color (const vec4& c)
-    {
-      c_sel_ = c;
-    }
+    set_selection_color (const vec4& c) { c_sel_ = c; }
 
     void
-    set_bg_color (const vec4& c)
-    {
-      c_bg_ = c;
-    }
+    set_bg_color (const vec4& c) { c_bg_ = c; }
 
   private:
     void
@@ -117,7 +105,8 @@ namespace mine
 
   private:
     render_device dev_;
-    camera_2d cam_;
+
+    std::unordered_map<window_id, camera_2d> cams_;
 
     ft_rasterizer rast_;
     bin_packer pack_;
@@ -156,6 +145,7 @@ namespace mine
     vec4 c_sel_;
     vec4 c_bg_;
 
-    float max_sy_ {1e10f};
+    float screen_w_ {1024.0f};
+    float screen_h_ {768.0f};
   };
 }
