@@ -1,5 +1,5 @@
 #include <mine/mine-window-render.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 #include <mine/mine-unicode.hxx>
 #include <mine/mine-window-opengl-typography-material.hxx>
 

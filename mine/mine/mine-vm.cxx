@@ -1,5 +1,5 @@
 #include <mine/mine-vm.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 #include <cstring>
 #include <iostream>

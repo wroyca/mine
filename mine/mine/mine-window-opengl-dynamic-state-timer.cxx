@@ -1,5 +1,5 @@
 #include <mine/mine-window-opengl-dynamic-state-timer.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 namespace mine
 {

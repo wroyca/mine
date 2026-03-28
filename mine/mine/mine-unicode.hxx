@@ -14,7 +14,8 @@
 #include <unicode/unistr.h>
 #include <unicode/utypes.h>
 
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
+#include <mine/mine-predefs.hxx>
 
 namespace mine
 {
@@ -126,10 +127,10 @@ namespace mine
     // is expensive and rarely what you want.
     //
     icu_break_iterator (const icu_break_iterator&)
-      = MINE_DELETE_WITH_REASON("ICU iterators hold unique pointers and heavy internal state; use move semantics instead");
+      = MINE_CPP_DELETED_FUNCTION("ICU iterators hold unique pointers and heavy internal state; use move semantics instead");
 
     icu_break_iterator& operator= (const icu_break_iterator&)
-      = MINE_DELETE_WITH_REASON("ICU iterators hold unique pointers and heavy internal state; use move semantics instead");
+      = MINE_CPP_DELETED_FUNCTION("ICU iterators hold unique pointers and heavy internal state; use move semantics instead");
 
     icu_break_iterator (icu_break_iterator&&) noexcept = default;
     icu_break_iterator& operator= (icu_break_iterator&&) noexcept = default;
@@ -379,10 +380,10 @@ namespace mine
     // need a new cache anyway).
     //
     grapheme_index (const grapheme_index&)
-      = MINE_DELETE_WITH_REASON("Copying a segmentation cache is a logical error; recompute or move instead");
+      = MINE_CPP_DELETED_FUNCTION("Copying a segmentation cache is a logical error; recompute or move instead");
 
     grapheme_index& operator= (const grapheme_index&)
-      = MINE_DELETE_WITH_REASON("Copying a segmentation cache is a logical error; recompute or move instead");
+      = MINE_CPP_DELETED_FUNCTION("Copying a segmentation cache is a logical error; recompute or move instead");
 
     grapheme_index (grapheme_index&&) noexcept = default;
     grapheme_index& operator= (grapheme_index&&) noexcept = default;

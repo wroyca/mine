@@ -10,7 +10,7 @@
 #include <immer/algorithm.hpp>
 
 #include <mine/mine-types.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 namespace mine
 {

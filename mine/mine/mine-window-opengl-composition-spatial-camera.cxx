@@ -1,5 +1,5 @@
 #include <mine/mine-window-opengl-composition-spatial-camera.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 #include <algorithm>
 

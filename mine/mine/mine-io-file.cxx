@@ -9,7 +9,7 @@
 #include <immer/algorithm.hpp>
 #include <immer/flex_vector_transient.hpp>
 
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 using namespace std;
 

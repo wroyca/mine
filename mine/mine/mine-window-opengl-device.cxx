@@ -1,5 +1,5 @@
 #include <mine/mine-window-opengl-device.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 #include <mine/glad/glad.h>
 #include <GLFW/glfw3.h>

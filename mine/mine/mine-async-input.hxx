@@ -19,6 +19,9 @@
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-terminal-input.hxx>
 #include <mine/mine-terminal-input-impl.hxx>
+#include <mine/mine-terminal-input.hxx>
+
+#include <mine/mine-predefs.hxx>
 
 namespace mine
 {
@@ -48,17 +51,19 @@ namespace mine
 #endif
     }
 
-    async_input (const async_input&)
-      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be copied");
+    async_input (const async_input&) = MINE_CPP_DELETED_FUNCTION (
+      "async_input captures 'this' and cannot be copied");
 
-    async_input (async_input&&)
-      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be moved");
+    async_input (async_input&&) = MINE_CPP_DELETED_FUNCTION (
+      "async_input captures 'this' and cannot be moved");
 
-    async_input& operator= (const async_input&)
-      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be copied");
+    async_input&
+    operator = (const async_input&) = MINE_CPP_DELETED_FUNCTION (
+      "async_input captures 'this' and cannot be copied");
 
-    async_input& operator= (async_input&&)
-      = MINE_DELETE_WITH_REASON("async_input captures 'this' and cannot be moved");
+    async_input&
+    operator = (async_input&&) = MINE_CPP_DELETED_FUNCTION (
+      "async_input captures 'this' and cannot be moved");
 
     ~async_input ()
     {

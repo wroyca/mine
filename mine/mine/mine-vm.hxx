@@ -1,14 +1,15 @@
 #pragma once
 
-#include <mine/mine-types.hxx>
-#include <mine/mine-assert.hxx>
-
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <mine/mine-types.hxx>
+#include <mine/mine-contract.hxx>
+#include <mine/mine-predefs.hxx>
 
 // Forward declare Lua state (no Lua headers in public API).
 //
@@ -106,16 +107,16 @@ namespace mine
     vm (vm_limits limits = vm_limits::default_limits ());
 
     vm (const vm&)
-      = MINE_DELETE_WITH_REASON("vm manages unique execution state and hardware resources that cannot be duplicated");
+      = MINE_CPP_DELETED_FUNCTION("vm manages unique execution state and hardware resources that cannot be duplicated");
 
     vm& operator= (const vm&)
-      = MINE_DELETE_WITH_REASON("vm manages unique execution state and hardware resources that cannot be duplicated");
+      = MINE_CPP_DELETED_FUNCTION("vm manages unique execution state and hardware resources that cannot be duplicated");
 
     vm (vm&&)
-      = MINE_DELETE_WITH_REASON("vm contains internal self-references and stable memory mappings that prevent moving");
+      = MINE_CPP_DELETED_FUNCTION("vm contains internal self-references and stable memory mappings that prevent moving");
 
     vm& operator= (vm&&)
-      = MINE_DELETE_WITH_REASON("vm contains internal self-references and stable memory mappings that prevent moving");
+      = MINE_CPP_DELETED_FUNCTION("vm contains internal self-references and stable memory mappings that prevent moving");
 
     ~vm ();
 

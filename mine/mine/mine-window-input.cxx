@@ -1,5 +1,5 @@
 #include <mine/mine-window-input.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 #include <GLFW/glfw3.h>
 

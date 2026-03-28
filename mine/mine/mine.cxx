@@ -18,7 +18,7 @@
 #include <mine/mine-terminal-render.hxx>
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-async-input.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 #include <mine/mine-window.hxx>
 
 // OpenGL GUI dependencies.

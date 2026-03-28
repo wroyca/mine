@@ -4,7 +4,7 @@
 #include <utility>
 
 #include <mine/mine-types.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 // Forward declare GLFW handle.
 //

@@ -5,7 +5,8 @@
 
 #include <boost/asio.hpp>
 
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
+#include <mine/mine-predefs.hxx>
 
 namespace mine
 {
@@ -39,16 +40,16 @@ namespace mine
     }
 
     async_loop (const async_loop&)
-      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be copied");
+      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be copied");
 
     async_loop (async_loop&&)
-      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be moved");
+      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be moved");
 
     async_loop& operator = (const async_loop&)
-      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be copied");
+      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be copied");
 
     async_loop& operator = (async_loop&&)
-      = MINE_DELETE_WITH_REASON("async_loop owns an io_context and cannot be moved");
+      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be moved");
 
     ~async_loop () = default;
 

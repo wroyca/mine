@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 namespace mine
 {

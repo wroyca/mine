@@ -1,5 +1,5 @@
 #include <mine/mine-treesitter.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 #include <utility>
 

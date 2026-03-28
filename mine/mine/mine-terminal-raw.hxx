@@ -4,7 +4,7 @@
 #include <utility> // move
 
 #include <mine/mine-traits.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 // Platform specifics.
 //

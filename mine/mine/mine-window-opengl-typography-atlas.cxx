@@ -1,5 +1,5 @@
 #include <mine/mine-window-opengl-typography-atlas.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 #include <algorithm>
 #include <cstring>

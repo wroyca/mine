@@ -3,7 +3,7 @@
 #include <algorithm>
 
 #include <mine/mine-types.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 #include <mine/mine-core-buffer.hxx>
 
 namespace mine

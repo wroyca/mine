@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 #include <mine/mine-window-opengl-composition-linear-algebra-vec.hxx>
 
 #include <cmath>

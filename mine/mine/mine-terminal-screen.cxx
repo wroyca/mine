@@ -1,2 +1,2 @@
 #include <mine/mine-terminal-screen.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>

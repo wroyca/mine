@@ -1,5 +1,5 @@
 #include <mine/mine-window-opengl-typography-raster.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 
 #include <string>
 #include <cstring>

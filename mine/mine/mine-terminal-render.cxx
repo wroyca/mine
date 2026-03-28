@@ -1,5 +1,5 @@
 #include <mine/mine-terminal-render.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 #include <mine/mine-unicode.hxx>
 
 #include <iostream>

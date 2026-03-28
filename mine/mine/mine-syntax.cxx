@@ -1,5 +1,5 @@
 #include <mine/mine-syntax.hxx>
-#include <mine/mine-assert.hxx>
+#include <mine/mine-contract.hxx>
 #include <mine/mine-utility.hxx>
 
 #ifdef _WIN32
