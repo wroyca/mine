@@ -6,6 +6,8 @@
   </picture>
 </p>
 
+![Mine](.github/mine.png)
+
 ## Building from Source
 
 Mine is built using the [build2](https://build2.org/build2-toolchain/doc/build2-toolchain-intro.xhtml#preface) build system. To get started, you'll need the staged toolchain, which you can grab as either source or binary packages. The pre-built binaries are available here:
