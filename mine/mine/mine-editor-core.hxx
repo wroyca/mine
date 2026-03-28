@@ -10,11 +10,12 @@
 #include <lua.hpp>
 
 #include <mine/mine-async-loop.hxx>
+#include <mine/mine-command.hxx>
 #include <mine/mine-core-state.hxx>
 #include <mine/mine-io-file.hxx>
-#include <mine/mine-command.hxx>
 #include <mine/mine-terminal-input.hxx>
 #include <mine/mine-utility.hxx>
+#include <mine/mine-vm-bridge.hxx>
 #include <mine/mine-vm.hxx>
 
 namespace mine
@@ -415,33 +416,10 @@ namespace mine
     load_config ()
     {
       vm_.initialize ();
-
-      // Hook up the Lua print function to our command line display so that user
-      // debug output goes to the right place.
-      //
       vm_.set_print_handler (&print_handler_);
-
-      // Expose the core instance to the VM as global userdata before we run the
-      // configuration. Native bindings will fish this out from the stack to
-      // reach back into the host environment.
-      //
       vm_.set_global_userdata ("__mine_core", this);
 
-      std::vector<native_binding> bs ({{"bind",
-                                        [] (lua_State* l) -> int
-      {
-        lua_getglobal (l, "__mine_core");
-        auto* c (static_cast<core*> (lua_touserdata (l, -1)));
-        lua_pop (l, 1);
-
-        if (c && lua_isstring (l, 1) && lua_isstring (l, 2))
-        {
-          c->bind_key (lua_tostring (l, 1), lua_tostring (l, 2));
-        }
-        return 0;
-      }}});
-
-      vm_.register_module ("mine", bs);
+      register_core_api (vm_);
 
       // Now bootstrap Fennel. We need to read the compiler from the install
       // data directory and evaluate it directly into the VM.
