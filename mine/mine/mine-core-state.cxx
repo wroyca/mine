@@ -57,8 +57,8 @@ namespace mine
                   uint16_t w, uint16_t h,
                   vector<window_layout>& o)
   {
-    // If we hit a leaf, we've found a concrete window. Just record its spatial
-    // boundaries.
+    // If we hit a leaf, we've found a concrete window. Just record its
+    // spatial boundaries.
     //
     if (n->is_leaf)
     {
@@ -66,22 +66,27 @@ namespace mine
       return;
     }
 
-    // Otherwise, partition the available space according to the split ratio and
-    // recurse down both branches.
+    // Otherwise, partition the available space according to the split
+    // ratio and recurse down both branches.
     //
     if (n->dir == split_dir::horizontal)
     {
       uint16_t h1 (static_cast<uint16_t> (h * n->ratio));
       uint16_t h2 (h - h1);
+
       compute_layout (n->child1, x, y, w, h1, o);
       compute_layout (n->child2, x, y + h1, w, h2, o);
     }
     else
     {
-      uint16_t w1 (static_cast<uint16_t> (w * n->ratio));
-      uint16_t w2 (w - w1);
+      // Reserve exactly one column for the vertical border. We give the
+      // remaining space to the two children.
+      //
+      uint16_t w1 (static_cast<uint16_t> ((w > 0 ? w - 1 : 0) * n->ratio));
+      uint16_t w2 ((w > 0 ? w - 1 : 0) - w1);
+
       compute_layout (n->child1, x, y, w1, h, o);
-      compute_layout (n->child2, x + w1, y, w2, h, o);
+      compute_layout (n->child2, x + w1 + 1, y, w2, h, o);
     }
   }
 

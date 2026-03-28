@@ -245,7 +245,7 @@ namespace mine
 
       // Wire up Input -> Logic.
       //
-      input_ = make_unique<async_input_handler> (
+      input_ = make_unique<async_input> (
         loop_,
         [this] (const input_event& e) { handle_input (e); });
 
@@ -356,7 +356,7 @@ namespace mine
     terminal_raw_mode raw_;
 
     unique_ptr<terminal_renderer>       ren_;
-    unique_ptr<async_input_handler>     input_;
+    unique_ptr<async_input>             input_;
 
 #ifndef _WIN32
     unique_ptr<boost::asio::signal_set> winch_;

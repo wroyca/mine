@@ -1,3 +1,4 @@
+
 #include <mine/mine-terminal-render.hxx>
 #include <mine/mine-contract.hxx>
 #include <mine/mine-unicode.hxx>
@@ -77,25 +78,25 @@ namespace mine
     // The idea here is to compute a minimal "diff" (e.g., "only char at 10,10
     // changed").
     //
-    terminal_screen next (build_screen (s));
+    terminal_screen n (build_screen (s));
 
     // Handle terminal resize events that might have happened since the last
     // frame. If sizes mismatch, our "current" knowledge is garbage, so we
     // nuke it.
     //
-    if (next.size () != current_screen_.size ())
+    if (n.size () != current_screen_.size ())
     {
       clear_screen ();
       cout.flush ();
-      current_screen_ = terminal_screen (next.size ());
+      current_screen_ = terminal_screen (n.size ());
     }
 
-    screen_diff diff (compute_screen_diff (current_screen_, next));
+    screen_diff d (compute_screen_diff (current_screen_, n));
 
-    if (!diff.empty ())
+    if (!d.empty ())
     {
-      apply_diff (diff);
-      current_screen_ = move (next);
+      apply_diff (d);
+      current_screen_ = move (n);
     }
 
     // Now that the paint is dry, put the hardware cursor where the logical
@@ -131,23 +132,23 @@ namespace mine
     // diffing logic for the status row and avoids custom "draw immediately"
     // logic.
     //
-    terminal_screen_builder next_builder (current_screen_);
+    terminal_screen_builder b (current_screen_);
 
     // Since a layout split heavily multiplexes rendering surfaces per grid
     // square, any cursor activity usually mandates regenerating all context
     // rows to avoid orphaned dirty pixels in the terminal pipeline.
     //
-    draw_buffer (next_builder, s);
-    draw_cmdline (next_builder, s);
+    draw_buffer (b, s);
+    draw_cmdline (b, s);
 
-    terminal_screen next (next_builder.finish ());
+    terminal_screen n (b.finish ());
 
-    screen_diff diff (compute_screen_diff (current_screen_, next));
+    screen_diff d (compute_screen_diff (current_screen_, n));
 
-    if (!diff.empty ())
+    if (!d.empty ())
     {
-      apply_diff (diff);
-      current_screen_ = std::move (next);
+      apply_diff (d);
+      current_screen_ = std::move (n);
     }
 
     position_cursor (s);
@@ -202,9 +203,9 @@ namespace mine
 
     // Fast path: ASCII is always 1.
     //
-    unsigned char first (static_cast<unsigned char> (g[0]));
+    unsigned char f (static_cast<unsigned char> (g[0]));
 
-    if (first < 0x80)
+    if (f < 0x80)
       return 1;
 
     // Heuristic:
@@ -214,7 +215,7 @@ namespace mine
     // TODO: This is a hack. We should use a proper `wcwidth` implementation
     // or look up the Unicode East Asian Width property.
     //
-    if (first >= 0xE0)
+    if (f >= 0xE0)
       return 2;
 
     return 1;
@@ -223,98 +224,98 @@ namespace mine
   terminal_screen terminal_renderer::
   build_screen (const editor_state& s) const
   {
-    terminal_screen_builder scr (current_screen_.size ());
+    terminal_screen_builder b (current_screen_.size ());
 
-    draw_buffer (scr, s);
-    draw_cmdline (scr, s);
+    draw_buffer (b, s);
+    draw_cmdline (b, s);
 
-    return scr.finish ();
+    return b.finish ();
   }
 
   void terminal_renderer::
-  draw_buffer (terminal_screen_builder& ts, const editor_state& s) const
+  draw_buffer (terminal_screen_builder& b, const editor_state& s) const
   {
-    auto sz (ts.size ());
-    std::vector<window_layout> lays;
+    auto sz (b.size ());
+    std::vector<window_layout> ls;
 
-    // Reserve bottom-most row exclusively for the prompt stream handler.
+    // Reserve the bottom-most row exclusively for the prompt stream handler.
     //
-    s.get_layout (lays, sz.cols, sz.rows > 0 ? sz.rows - 1 : 0);
+    s.get_layout (ls, sz.cols, sz.rows > 0 ? sz.rows - 1 : 0);
 
-    for (const auto& lay : lays)
+    for (const auto& l : ls)
     {
-      const auto& ws (s.get_window (lay.win));
+      const auto& ws (s.get_window (l.win));
       const auto& bs (s.get_buffer (ws.buf));
-      bool is_act (s.active_window () == lay.win);
+      bool a (s.active_window () == l.win);
 
-      const auto& b (bs.content);
-      const auto& v (ws.vw);
-      const auto& c (ws.cur);
+      const auto& bc (bs.content);
+      const auto& vw (ws.vw);
+      const auto& cu (ws.cur);
 
       // Figure out the selection bounds upfront. We normalize them so that the
       // start is always before the end, which makes our hit-testing during
       // rendering trivial.
       //
-      bool hs (c.has_mark ());
-      cursor_position ss (c.position ());
-      cursor_position se (c.position ());
+      bool hm (cu.has_mark ());
+      cursor_position ms (cu.position ());
+      cursor_position me (cu.position ());
 
-      if (hs)
+      if (hm)
       {
-        ss = min (c.mark (), c.position ());
-        se = max (c.mark (), c.position ());
+        ms = min (cu.mark (), cu.position ());
+        me = max (cu.mark (), cu.position ());
       }
 
-      uint16_t rws (lay.h > 1 ? lay.h - 1 : 0);
-      uint16_t lim (lay.w);
+      uint16_t rh (l.h > 1 ? l.h - 1 : 0);
+      uint16_t rw (l.w);
 
       // Prepare our syntax highlights for the viewport lines so we don't query
       // the whole tree.
       //
-      size_t start_line (v.top ().value);
-      size_t end_line (start_line + rws);
-      auto highlights (highlighter_.query_lines (start_line, end_line));
+      size_t sl (vw.top ().value);
+      size_t el (sl + rh);
+      auto hl (highlighter_.query_lines (sl, el));
 
-      for (uint16_t r (0); r < rws; ++r)
+      for (uint16_t r (0); r < rh; ++r)
       {
-        line_number ln (v.top ().value + r);
+        line_number ln (vw.top ().value + r);
 
         // Are we past the end of the file? If so, we just draw the standard empty
         // void tilde and move on to the next row.
         //
-        if (ln.value >= b.line_count ())
+        if (ln.value >= bc.line_count ())
         {
           cell_attributes ca;
           ca.fg = 12;
 
-          ts.set_char (screen_position (lay.y + r, lay.x + 0), '~', ca);
+          b.set_char (screen_position (l.y + r, l.x + 0), '~', ca);
           continue;
         }
 
-        const auto& l (b.line_at (ln));
+        const auto& cl (bc.line_at (ln));
 
         // Fast path for empty lines. We only need to care about whether this line
         // falls inside an active multi-line selection.
         //
-        if (l.count () == 0)
+        if (cl.count () == 0)
         {
           cursor_position ep (ln, column_number (0));
 
           // Note that we let the hardware cursor double as visual selection
           // highlight to prevent double-inversion.
           //
-          if (hs && ep >= ss && ep <= se && ep != c.position () && lim > 0)
+          if (hm && ep >= ms && ep <= me && ep != cu.position () && rw > 0)
           {
             cell_attributes ca;
             ca.fg = 0;
             ca.bg = 7;
-            ts.set_char (screen_position (lay.y + r, lay.x + 0), ' ', ca);
+            b.set_char (screen_position (l.y + r, l.x + 0), ' ', ca);
           }
           continue;
         }
 
-        auto txt (l.view ());
-        const auto& seg (l.idx.get_segmentation ());
+        auto tv (cl.view ());
+        const auto& sg (cl.idx.get_segmentation ());
 
         // Render the text.
         //
@@ -322,20 +323,20 @@ namespace mine
         // physically into screen columns. This means we have to keep track of
         // both logical and physical progression.
         //
-        auto rng (make_grapheme_range (seg));
+        auto rg (make_grapheme_range (sg));
 
-        uint16_t col (0);
-        std::size_t lc (0);
+        uint16_t c (0);
+        size_t gc (0);
 
-        // Note that we check 'col < lim' inside the loop rather than in the
+        // Note that we check 'c < rw' inside the loop rather than in the
         // condition. That is, we need to handle wide characters by preventing
         // partial drawing if a double-width char exceeds the edge.
         //
-        for (auto i (rng.begin ()); i != rng.end (); ++i)
+        for (auto i (rg.begin ()); i != rg.end (); ++i)
         {
-          if (col >= lim) break;
+          if (c >= rw) break;
 
-          auto g (i->text (txt));
+          auto g (i->text (tv));
           int w (estimate_grapheme_width (g));
 
           // Sanity check for weird control characters or zero-width joiners that
@@ -345,107 +346,123 @@ namespace mine
 
           // Clip if the grapheme doesn't fit on the remainder of the line.
           //
-          if (col + static_cast<uint16_t> (w) > lim) break;
+          if (c + static_cast<uint16_t> (w) > rw) break;
 
-          cursor_position cp (ln, column_number (lc));
+          cursor_position cp (ln, column_number (gc));
 
           // Apply our syntax highlighting based on the byte offset of the
           // current grapheme.
           //
-          syntax_token_type token (syntax_token_type::none);
-          size_t off (i->byte_offset);
+          syntax_token_type tk (syntax_token_type::none);
+          size_t bo (i->byte_offset);
 
-          for (const auto& hl : highlights)
+          for (const auto& h : hl)
           {
-            if (ln.value > hl.start_line ||
-               (ln.value == hl.start_line && off >= hl.start_col_byte))
+            if (ln.value > h.start_line ||
+               (ln.value == h.start_line && bo >= h.start_col_byte))
             {
-              if (ln.value < hl.end_line ||
-                 (ln.value == hl.end_line && off < hl.end_col_byte))
+              if (ln.value < h.end_line ||
+                 (ln.value == h.end_line && bo < h.end_col_byte))
               {
-                token = hl.type;
+                tk = h.type;
               }
             }
           }
 
           cell_attributes ca;
-          ca.fg = map_token_color (token);
+          ca.fg = map_token_color (tk);
 
           // Exclude the cell under the cursor from explicit highlight coloring to
           // avoid "double inversion" where the hardware cursor sits.
           //
-          bool sel (hs && cp >= ss && cp <= se && cp != c.position ());
+          bool sm (hm && cp >= ms && cp <= me && cp != cu.position ());
 
-          if (sel)
+          if (sm)
           {
             ca.fg = 0;
             ca.bg = 7;
           }
 
-          ts.set_grapheme (screen_position (lay.y + r, lay.x + col), g, ca, w == 2);
+          b.set_grapheme (screen_position (l.y + r, l.x + c), g, ca, w == 2);
 
-          col += static_cast<uint16_t> (w);
-          lc++;
+          c += static_cast<uint16_t> (w);
+          gc++;
         }
 
-        cursor_position ep (ln, column_number (lc));
+        cursor_position ep (ln, column_number (gc));
 
         // We also need to handle the multi-line selection wrap. If the selection
         // spans across lines, we draw an inverted space at the end of the line to
         // visually indicate the newline is selected.
         //
-        if (hs && ep >= ss && ep <= se && ep != c.position () && col < lim)
+        if (hm && ep >= ms && ep <= me && ep != cu.position () && c < rw)
         {
           cell_attributes ca;
           ca.fg = 0;
           ca.bg = 7;
-          ts.set_char (screen_position (lay.y + r, lay.x + col), ' ', ca);
+          b.set_char (screen_position (l.y + r, l.x + c), ' ', ca);
         }
       }
 
-      if (lay.h > 1)
+      if (l.h > 1)
       {
-        uint16_t row (lay.y + lay.h - 1);
+        uint16_t r (l.y + l.h - 1);
 
-        // Build status string: " Line X, Col Y [Modified]"
+        // Build the status string.
         //
-        string st (" Line " + to_string (c.line ().value + 1) + ", Col " + to_string (c.column ().value + 1));
+        string st (" Line " + to_string (cu.line ().value + 1) + ", Col " + to_string (cu.column ().value + 1));
 
         if (bs.modified)
           st += "[Modified]";
 
-        if (st.size () > lay.w)
-          st.resize (lay.w);
+        if (st.size () > l.w)
+          st.resize (l.w);
 
         // Render inverted (Black on Grey for active, Black on Dark Grey for inactive).
         //
-        cell_attributes attr {.fg = 0, .bg = static_cast<uint8_t> (is_act ? 7 : 8)};
+        cell_attributes ca {.fg = 0, .bg = static_cast<uint8_t> (a ? 7 : 8)};
 
-        uint16_t cc (0);
+        uint16_t c (0);
         for (char ch : st)
         {
-          ts.set_char (screen_position (row, lay.x + cc), ch, attr);
-          ++cc;
+          b.set_char (screen_position (r, l.x + c), ch, ca);
+          ++c;
         }
 
-        // Fill rest of line with background color.
+        // Fill the rest of the line with the background color.
         //
-        while (cc < lay.w)
+        while (c < l.w)
         {
-          ts.set_char (screen_position (row, lay.x + cc), ' ', attr);
-          ++cc;
+          b.set_char (screen_position (r, l.x + c), ' ', ca);
+          ++c;
         }
+      }
+
+      // Draw the vertical separator border if we are not the rightmost window.
+      // We use a dark grey box-drawing character to maintain visual hierarchy.
+      //
+      if (l.x + l.w < sz.cols)
+      {
+        cell_attributes ca;
+        ca.fg = 8;
+        ca.bg = 0;
+
+        // We draw all the way to l.h, which includes the status line, so the
+        // separator connects continuously down the split.
+        //
+        for (uint16_t r (0); r < l.h; ++r)
+          b.set_grapheme (screen_position (l.y + r, l.x + l.w), "│", ca);
       }
     }
   }
 
   void terminal_renderer::
-  draw_cmdline (terminal_screen_builder& scr, const editor_state& s) const
+  draw_cmdline (terminal_screen_builder& b, const editor_state& s) const
   {
-    auto sz (scr.size ());
+    auto sz (b.size ());
     if (sz.rows == 0) return;
 
-    uint16_t row (sz.rows - 1);
+    uint16_t r (sz.rows - 1);
 
     string st;
     if (s.cmdline ().active)
@@ -456,18 +473,18 @@ namespace mine
     if (st.size () > sz.cols)
       st.resize (sz.cols);
 
-    cell_attributes attr {.fg = 7, .bg = 0};
+    cell_attributes ca {.fg = 7, .bg = 0};
 
     uint16_t c (0);
     for (char ch : st)
     {
-      scr.set_char (screen_position (row, c), ch, attr);
+      b.set_char (screen_position (r, c), ch, ca);
       ++c;
     }
 
     while (c < sz.cols)
     {
-      scr.set_char (screen_position (row, c), ' ', attr);
+      b.set_char (screen_position (r, c), ' ', ca);
       ++c;
     }
   }
@@ -475,8 +492,8 @@ namespace mine
   void terminal_renderer::
   apply_diff (const screen_diff& d)
   {
-    cell_attributes cur_attr;
-    bool attr_set (false);
+    cell_attributes ca;
+    bool as (false);
 
     // The Diff Applicator.
     //
@@ -498,11 +515,11 @@ namespace mine
 
       move_cursor (c.pos);
 
-      if (!attr_set || cur_attr != c.cell.attrs)
+      if (!as || ca != c.cell.attrs)
       {
         set_attributes (c.cell.attrs);
-        cur_attr = c.cell.attrs;
-        attr_set = true;
+        ca = c.cell.attrs;
+        as = true;
       }
 
       write (c.cell.text);
@@ -559,12 +576,12 @@ namespace mine
     }
 
     auto sz (current_screen_.size ());
-    std::vector<window_layout> lays;
-    s.get_layout (lays, sz.cols, sz.rows > 0 ? sz.rows - 1 : 0);
+    std::vector<window_layout> ls;
+    s.get_layout (ls, sz.cols, sz.rows > 0 ? sz.rows - 1 : 0);
 
     const window_layout* aw (nullptr);
 
-    for (const auto& l : lays)
+    for (const auto& l : ls)
     {
       if (l.win == s.active_window ())
       {
@@ -582,48 +599,48 @@ namespace mine
     const auto& ws (s.get_window (aw->win));
     const auto& bs (s.get_buffer (ws.buf));
 
-    const auto& v (ws.vw);
-    const auto& c (ws.cur);
-    const auto& buf (bs.content);
+    const auto& vw (ws.vw);
+    const auto& cu (ws.cur);
+    const auto& bf (bs.content);
 
     // Convert Logical (Line, Grapheme) -> Physical (Screen Row, Screen Col).
     //
-    auto row (v.screen_row (c.line ()));
+    auto r (vw.screen_row (cu.line ()));
 
-    if (row)
+    if (r)
     {
       // To find the physical column, we have to sum the display widths of
       // every grapheme before the cursor. This is O(N) on line length.
       //
-      uint16_t screen_col (0);
+      uint16_t sc (0);
 
       // Fast path: if cursor is at column 0, width is 0.
       //
-      if (c.column ().value > 0)
+      if (cu.column ().value > 0)
       {
-        const auto& l (buf.line_at (c.line ()));
-        auto txt (l.view ());
-        const auto& seg (l.idx.get_segmentation ());
-        auto rng (make_grapheme_range (seg));
+        const auto& l (bf.line_at (cu.line ()));
+        auto tv (l.view ());
+        const auto& sg (l.idx.get_segmentation ());
+        auto rg (make_grapheme_range (sg));
 
         // We need to process 'target' number of graphemes.
         //
-        std::size_t target (c.column ().value);
+        std::size_t tg (cu.column ().value);
 
-        for (auto it (rng.begin ()); it != rng.end () && target > 0; ++it, --target)
+        for (auto i (rg.begin ()); i != rg.end () && tg > 0; ++i, --tg)
         {
-          int w (estimate_grapheme_width (it->text (txt)));
+          int w (estimate_grapheme_width (i->text (tv)));
 
           if (w <= 0) w = 1;
 
-          screen_col += static_cast<uint16_t> (w);
+          sc += static_cast<uint16_t> (w);
         }
       }
 
       // Respect localized layout grid geometry offsets so hardware blinking
       // correlates logically to individual child surfaces without visual shearing.
       //
-      move_cursor (screen_position (aw->y + *row, aw->x + screen_col));
+      move_cursor (screen_position (aw->y + *r, aw->x + sc));
       show_cursor ();
     }
     else
@@ -646,23 +663,23 @@ namespace mine
   void terminal_renderer::
   set_attributes (cell_attributes a)
   {
-    ostringstream oss;
-    oss << "\x1b[0"; // Reset
+    ostringstream os;
+    os << "\x1b[0"; // Reset
 
-    if (a.bold)      oss << ";1";
-    if (a.italic)    oss << ";3";
-    if (a.underline) oss << ";4";
+    if (a.bold)      os << ";1";
+    if (a.italic)    os << ";3";
+    if (a.underline) os << ";4";
 
     // Standard vs Bright colors.
     //
-    if (a.fg < 8) oss << ";3" << static_cast<int> (a.fg);
-    else          oss << ";9" << static_cast<int> (a.fg - 8);
+    if (a.fg < 8) os << ";3" << static_cast<int> (a.fg);
+    else          os << ";9" << static_cast<int> (a.fg - 8);
 
-    if (a.bg < 8) oss << ";4" << static_cast<int> (a.bg);
-    else          oss << ";10" << static_cast<int> (a.bg - 8);
+    if (a.bg < 8) os << ";4" << static_cast<int> (a.bg);
+    else          os << ";10" << static_cast<int> (a.bg - 8);
 
-    oss << 'm';
-    write (oss.str ());
+    os << 'm';
+    write (os.str ());
   }
 
   void terminal_renderer::
