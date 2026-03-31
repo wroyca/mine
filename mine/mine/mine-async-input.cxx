@@ -112,15 +112,6 @@ namespace mine
       }
       catch (const boost::system::system_error& e)
       {
-        // Handle EOF and cancellation.
-        //
-        // EOF on stdin in raw mode is tricky. It usually means the pty
-        // vanished (but how?). For now, let's just keep spinning.
-        //
-        if (e.code () == boost::asio::error::eof ||
-            e.code () == boost::asio::error::broken_pipe)
-          continue;
-
         // If we were explicitly canceled (e.g., via stop ()), then bail out
         // of the loop.
         //

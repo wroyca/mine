@@ -131,14 +131,20 @@ namespace mine
       //
       raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 
-      // Control characters:
-      // VMIN=0, VTIME=0 makes read() non-blocking (return immediately).
+      // Control characters.
       //
-      // Note: Typically for TUI apps, VMIN=0/VTIME=1 (timeout) is safer,
-      // but we assume the caller is using an async loop (select/epoll)
-      // to wait for data before reading.
+      // Note that we must set VMIN to 1 rather than 0.
       //
-      raw.c_cc[VMIN] = 0;
+      // It might be tempting to use VMIN=0 since we are operating in
+      // non-blocking mode. However, doing so violates POSIX asynchronous
+      // stream semantics in a way that breaks Boost.Asio.
+      //
+      // If VMIN is 0 and there is no input available, the terminal driver
+      // makes read() return 0. To Asio, a 0-byte read unambiguously means
+      // EOF. This causes the reactor to throw an EOF error, and if we
+      // catch and continue, we end up in a tight loop spinning the CPU.
+      //
+      raw.c_cc[VMIN] = 1;
       raw.c_cc[VTIME] = 0;
 
       if (tcsetattr (STDIN_FILENO, TCSAFLUSH, &raw) != -1)
