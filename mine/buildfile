@@ -26,87 +26,87 @@ exe{mine}: cxx{mine-utility-uninstalled}: for_install = false
 # installing, it will be compiled even in the uninstalled case.
 #
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_ROOT=\"$regex.replace( \
       $src_root, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_DATA_ROOT=\"$regex.replace( \
       $src_root, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_EXEC_ROOT=\"$regex.replace( \
       $out_root, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_BIN=\"$regex.replace( \
       $out_root/bin, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_SBIN=\"$regex.replace( \
       $out_root/sbin, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_LIB=\"$regex.replace( \
       $out_root/lib, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_LIBEXEC=\"$regex.replace( \
       $out_root/libexec, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_PKGCONFIG=\"$regex.replace( \
       $out_root/pkgconfig, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_ETC=\"$regex.replace( \
       $src_root/etc, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_INCLUDE=\"$regex.replace( \
       $src_root/include, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_INCLUDE_ARCH=\"$regex.replace( \
       $out_root/include, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_SHARE=\"$regex.replace( \
       $src_root/share, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_DATA=\"$regex.replace( \
       $src_root/data, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_BUILDFILE=\"$regex.replace( \
       $src_root/buildfile, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_DOC=\"$regex.replace( \
       $src_root/doc, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_LEGAL=\"$regex.replace( \
       $src_root/legal, '\\', '\\\\')\"
 
-{obj obje}{utility-uninstalled}: \
+{obj obje}{mine-utility-uninstalled}: \
   cxx.poptions += \
     -DMINE_INSTALL_MAN=\"$regex.replace( \
       $src_root/man, '\\', '\\\\')\"
