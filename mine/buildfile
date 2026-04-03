@@ -25,51 +25,458 @@ exe{mine}: cxx{mine-utility-uninstalled}: for_install = false
 # Note that while the -installed object file should only be linked when we are
 # installing, it will be compiled even in the uninstalled case.
 #
-# Note also the use of regex replacement in the path macros below. We must
-# escape backslashes so they are not treated as C++ escape sequences when passed
-# as string literals on the compiler command line. This is primarily necessary
-# for Windows paths.
-#
-# For the uninstalled case, we map the data directory directly to the source
-# directory. Note that we append the package directory since we are not a bare
-# package. We keep this outside the install condition so local development
-# builds always receive the correct path.
-#
-{obj obje}{mine-utility-uninstalled}: cxx.poptions += \
-  -DMINE_INSTALL_DATA=\"$regex.replace($src_root/data, '\\', '\\\\')\"
 
-# Configure the installed object file only if we are actually installing.
-#
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_ROOT=\"$regex.replace( \
+      $src_root, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_DATA_ROOT=\"$regex.replace( \
+      $src_root, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_EXEC_ROOT=\"$regex.replace( \
+      $out_root, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_BIN=\"$regex.replace( \
+      $out_root/bin, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_SBIN=\"$regex.replace( \
+      $out_root/sbin, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_LIB=\"$regex.replace( \
+      $out_root/lib, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_LIBEXEC=\"$regex.replace( \
+      $out_root/libexec, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_PKGCONFIG=\"$regex.replace( \
+      $out_root/pkgconfig, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_ETC=\"$regex.replace( \
+      $src_root/etc, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_INCLUDE=\"$regex.replace( \
+      $src_root/include, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_INCLUDE_ARCH=\"$regex.replace( \
+      $out_root/include, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_SHARE=\"$regex.replace( \
+      $src_root/share, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_DATA=\"$regex.replace( \
+      $src_root/data, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_BUILDFILE=\"$regex.replace( \
+      $src_root/buildfile, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_DOC=\"$regex.replace( \
+      $src_root/doc, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_LEGAL=\"$regex.replace( \
+      $src_root/legal, '\\', '\\\\')\"
+
+{obj obje}{utility-uninstalled}: \
+  cxx.poptions += \
+    -DMINE_INSTALL_MAN=\"$regex.replace( \
+      $src_root/man, '\\', '\\\\')\"
+
 ifn! $install.root
 {
-  # Resolve the data installation directory. If the installation is relocatable,
-  # resolve it against the executable directory so the program can find its data
-  # dynamically at runtime. Otherwise, resolve it as a standard absolute path.
-  #
-  {obj obje}{mine-utility-installed}: cxx.poptions += \
-    -DMINE_INSTALL_DATA=\"$regex.replace(\
-      $install.resolve($install.data, \
-                       $install.relocatable ? $install.bin : [dir_path]), \
-      '\\', \
-      '\\\\')\"
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_ROOT=\"$regex.replace( \
+        $install.resolve( \
+          $install.root, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_DATA_ROOT=\"$regex.replace( \
+        $install.resolve( \
+          $install.data_root, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_EXEC_ROOT=\"$regex.replace( \
+        $install.resolve( \
+          $install.exec_root, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_BIN=\"$regex.replace( \
+        $install.resolve( \
+          $install.bin, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_SBIN=\"$regex.replace( \
+        $install.resolve( \
+          $install.sbin, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_LIB=\"$regex.replace( \
+        $install.resolve( \
+          $install.lib, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_LIBEXEC=\"$regex.replace( \
+        $install.resolve( \
+          $install.libexec, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_PKGCONFIG=\"$regex.replace( \
+        $install.resolve( \
+          $install.pkgconfig, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_ETC=\"$regex.replace( \
+        $install.resolve( \
+          $install.etc, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_INCLUDE=\"$regex.replace( \
+        $install.resolve( \
+          $install.include, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_INCLUDE_ARCH=\"$regex.replace( \
+        $install.resolve( \
+          $install.include_arch, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_SHARE=\"$regex.replace( \
+        $install.resolve( \
+          $install.share, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_DATA=\"$regex.replace( \
+        $install.resolve( \
+          $install.data, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_BUILDFILE=\"$regex.replace( \
+        $install.resolve( \
+          $install.buildfile, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_DOC=\"$regex.replace( \
+        $install.resolve( \
+          $install.doc, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_LEGAL=\"$regex.replace( \
+        $install.resolve( \
+          $install.legal, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
+
+  {obj obje}{mine-utility-installed}: \
+    cxx.poptions += \
+      -DMINE_INSTALL_MAN=\"$regex.replace( \
+        $install.resolve( \
+          $install.man, \
+          $install.relocatable ? $install.bin : [dir_path]), \
+        '\\', '\\\\')\"
 
   # Handle relocatable installations.
   #
   # If relocatable, the executable might be moved post-installation. We provide
-  # the base install root and the relative path from the executable back to the
-  # root.
+  # the base install directories and the relative paths from the executable back
+  # to each directory.
   #
   if $install.relocatable
   {
-    {obj obje}{mine-utility-installed}: cxx.poptions += \
-      -DMINE_INSTALL_ROOT=\"$regex.replace($install.root, '\\', '\\\\')\"
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_ROOT=\"$regex.replace( \
+          $install.root, '\\', '\\\\')\"
 
-    {obj obje}{mine-utility-installed}: cxx.poptions += \
-      -DMINE_INSTALL_ROOT_RELATIVE=\"$regex.replace(\
-        $path.relative($install.root, \
-                       $install.resolve($install.bin, [dir_path])), \
-        '\\', \
-        '\\\\')\"
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_ROOT_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.root, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_DATA_ROOT=\"$regex.replace( \
+          $install.data_root, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_DATA_ROOT_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.data_root, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_EXEC_ROOT=\"$regex.replace( \
+          $install.exec_root, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_EXEC_ROOT_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.exec_root, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_BIN=\"$regex.replace( \
+          $install.bin, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_BIN_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.bin, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_SBIN=\"$regex.replace( \
+          $install.sbin, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_SBIN_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.sbin, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_LIB=\"$regex.replace( \
+          $install.lib, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_LIB_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.lib, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_LIBEXEC=\"$regex.replace( \
+          $install.libexec, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_LIBEXEC_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.libexec, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_PKGCONFIG=\"$regex.replace( \
+          $install.pkgconfig, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_PKGCONFIG_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.pkgconfig, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_ETC=\"$regex.replace( \
+          $install.etc, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_ETC_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.etc, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_INCLUDE=\"$regex.replace( \
+          $install.include, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_INCLUDE_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.include, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_INCLUDE_ARCH=\"$regex.replace( \
+          $install.include_arch, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_INCLUDE_ARCH_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.include_arch, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_SHARE=\"$regex.replace( \
+          $install.share, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_SHARE_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.share, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_DATA=\"$regex.replace( \
+          $install.data, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_DATA_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.data, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_BUILDFILE=\"$regex.replace( \
+          $install.buildfile, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_BUILDFILE_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.buildfile, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_DOC=\"$regex.replace( \
+          $install.doc, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_DOC_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.doc, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_LEGAL=\"$regex.replace( \
+          $install.legal, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_LEGAL_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.legal, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_MAN=\"$regex.replace( \
+          $install.man, '\\', '\\\\')\"
+
+    {obj obje}{mine-utility-installed}: \
+      cxx.poptions += \
+        -DMINE_INSTALL_MAN_RELATIVE=\"$regex.replace( \
+          $path.relative( \
+            $install.man, \
+            $install.resolve($install.bin, [dir_path])), \
+          '\\', '\\\\')\"
   }
 }
 
