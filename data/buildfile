@@ -1,13 +1,9 @@
-
-define ttf: file
-ttf{*}: extension = ttf
-
-./: {ttf}{**}
+./: {file}{**}
 
 # Install into the mine/ subdirectory of, say, /usr/share/
 # recreating subdirectories.
 #
-{ttf}{**}:
+{file}{**}:
 {
   install         = data/
   install.subdirs = true
