@@ -3,7 +3,7 @@
 #include <optional>
 #include <utility> // move
 
-#include <mine/mine-traits.hxx>
+#include <mine/mine-types.hxx>
 #include <mine/mine-contract.hxx>
 
 // Platform specifics.

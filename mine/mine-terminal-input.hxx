@@ -7,7 +7,6 @@
 #include <compare>
 
 #include <mine/mine-types.hxx>
-#include <mine/mine-traits.hxx>
 
 namespace mine
 {
