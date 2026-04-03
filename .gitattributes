@@ -7,31 +7,13 @@
 # Use `eol=crlf` for files that should have the CRLF line ending both in the
 # working tree (even on Unix) and in the repository.
 #
-# *.bat text eol=crlf
+#*.bat text eol=crlf
 
-# Use `eol=lf` for files that should have the LF line ending both in the working
-# tree (even on Windows) and in the repository.
+# Use `eol=lf` for files that should have the LF line ending both in the
+# working tree (even on Windows) and in the repository.
 #
-# *.sh text eol=lf
+#*.sh text eol=lf
 
 # Use `binary` to make sure certain files are never auto-detected as text.
 #
-# *.png binary
-
-# Use `linguist-language` to specify the language for certain files.
-#
-# Note that build2 is obviously neither Shell nor YAML, but mapping them to
-# these languages is the closest approximation we currently have to drive GitHub
-# highlighter.
-#
-*.build       linguist-language=Shell
-  buildfile   linguist-language=Shell
-*.buildscript linguist-language=Shell
-  manifest    linguist-language=YAML
-*.manifest    linguist-language=YAML
-
-# Use `linguist-generated` attribute to mark or unmark paths to be ignored for
-# the repository's language statistics and hidden by default in diffs.
-#
-mine/mine/glad/**    linguist-generated=true
-mine/data/fennel.lua linguist-generated=true
+#*.png binary

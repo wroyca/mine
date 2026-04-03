@@ -1,12 +1,6 @@
 : 1
-summary: Mine project repository
+summary: mine project repository
 
-# Mine consumes packages from the testing repository. In practice, testing
-# functions as the de facto source of up-to-date packages while maintaining a
-# reasonable level of stability.
-#
-# For background, see: build2-toolchain-packaging.xhtml#review
-#
 :
 role: prerequisite
 location: https://pkg.cppget.org/1/testing
@@ -14,7 +8,8 @@ trust: 70:64:FE:E4:E0:F3:60:F1:B4:51:E1:FA:12:5C:E0:B3:DB:DF:96:33:39:B9:2E:E5:C
 
 :
 role: prerequisite
-location: https://git.build2.org/packaging/icu/icu.git#review-release
+location: https://queue.stage.build2.org/1/alpha
+trust: EC:50:13:E2:3D:F7:92:B4:50:0B:BF:2A:1F:7D:31:04:C6:57:6F:BC:BE:04:2E:E0:58:14:FA:66:66:21:1F:14
 
 :
 role: prerequisite

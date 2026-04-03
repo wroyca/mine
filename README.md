@@ -35,7 +35,7 @@ bpkg create -d mine -@mingw32        ^
   cc                                 ^
   config.bin.lib=static              ^
   !config.install.root=C:/mine/      ^
-  
+
 cd mine
 
 # To build:
@@ -126,7 +126,7 @@ bdep init -C @gcc                                   \
                       -grecord-gcc-switches         \
                       -fno-omit-frame-pointer       \
                       -mno-omit-leaf-frame-pointer"
-  
+
 # To build:
 #
 b
@@ -174,4 +174,3 @@ Contributions are welcome! If you are interested in helping expand Mine's editin
 ## License
 
 Mine is released under the [GNU General Public License v3](LICENSE.md).
-
