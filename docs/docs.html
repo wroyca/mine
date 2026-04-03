@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mine | Text Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+  </style>
+</head>
+<body class="bg-[#0d1117] text-[#c9d1d9] font-sans leading-relaxed min-h-screen flex flex-col">
+  <div class="max-w-3xl mx-auto px-6 py-16 sm:py-24 flex flex-col flex-grow w-full">
+
+    <header class="mb-16 pb-8">
+      <div class="flex justify-between items-end mb-4">
+        <h1 class="text-4xl font-bold text-white tracking-tight">Mine.</h1>
+        <span class="text-sm text-gray-500 border border-gray-700 rounded px-2 py-1">Press <kbd class="font-mono text-gray-300">/</kbd> to search</span>
+      </div>
+      <p class="text-xl text-gray-400 font-light mb-8">
+        Documentation.
+      </p>
+
+      <div class="relative">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <svg class="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <input type="text" id="search-input" autocomplete="off" spellcheck="false" placeholder="Search..." class="w-full bg-[#161b22] border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 transition-colors font-mono text-sm shadow-inner">
+
+        <div id="search-results" class="hidden absolute w-full mt-2 bg-[#161b22] border border-gray-700 rounded-lg shadow-2xl z-50 max-h-96 overflow-y-auto"></div>
+      </div>
+    </header>
+
+    <main class="space-y-16 flex-grow">
+      <section id="mine-bind" class="mb-12"><h2 class="flex items-center justify-between text-2xl font-bold text-white mb-3 font-mono border-b border-gray-800 pb-2"><span>mine.bind</span><span class="text-gray-500 font-normal text-lg">[chord action]</span></h2><div class="text-gray-300 leading-relaxed"><p>Binds a key chord to an editor action.</p><p class="mt-4">  Parses the <code class="bg-gray-800 text-blue-300 px-1 py-0.5 rounded font-mono text-sm">chord</code> string into an internal key event and maps it to the specified <code class="bg-gray-800 text-blue-300 px-1 py-0.5 rounded font-mono text-sm">action</code>. If the key chord is invalid or cannot be parsed, an error message is printed to the editor's message area.</p><div class="mt-6"><h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Example</h4><pre class="bg-[#161b22] border border-gray-800 rounded-lg p-4 overflow-x-auto text-sm font-mono text-gray-300"><code>(mine.bind C-s save-buffer)</code></pre></div></div></section>
+    </main>
+
+    <footer class="mt-20 text-sm text-gray-500 flex justify-center items-center">
+      <p>Released under the <a href="https://github.com/wroyca/mine/blob/main/LICENSE.md">GNU General Public License v3.</a></p>
+    </footer>
+  </div>
+
+  <script>
+    const searchIndex = [
+  { name: "mine.bind", id: "mine-bind", args: "chord action" },
+];
+
+
+    const input = document.getElementById('search-input');
+    const resultsBox = document.getElementById('search-results');
+    let selectedIndex = -1;
+
+    function updateSelection() {
+      const items = resultsBox.querySelectorAll('.search-result');
+      items.forEach((item, i) => {
+        if (i === selectedIndex) {
+          item.classList.add('bg-gray-800');
+        } else {
+          item.classList.remove('bg-gray-800');
+        }
+      });
+      if (items[selectedIndex]) {
+        items[selectedIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    function navigateTo(id) {
+      document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+      resultsBox.classList.add('hidden');
+      input.value = '';
+      input.blur();
+    }
+
+    input.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      if (!query) {
+        resultsBox.classList.add('hidden');
+        return;
+      }
+
+      const matches = searchIndex.map(item => {
+        const nameLower = item.name.toLowerCase();
+        const index = nameLower.indexOf(query);
+        if (index === -1) return null;
+        return { item, index, score: index === 0 ? 1 : 0 };
+      }).filter(x => x !== null)
+        .sort((a, b) => b.score - a.score || a.index - b.index)
+        .slice(0, 10); // Limit results for speed
+
+      if (matches.length === 0) {
+        resultsBox.innerHTML = '<div class="p-4 text-gray-500 text-sm font-mono">No results found.</div>';
+      } else {
+        resultsBox.innerHTML = matches.map((m, i) =>
+          `<div class="search-result p-3 border-b border-gray-800 hover:bg-gray-800 cursor-pointer text-sm font-mono flex items-center justify-between transition-colors" onclick="navigateTo('${m.item.id}')">
+             <span class="text-white font-bold">${m.item.name}</span>
+             <span class="text-gray-500 truncate ml-4">[${m.item.args}]</span>
+           </div>`
+        ).join('');
+      }
+
+      resultsBox.classList.remove('hidden');
+      selectedIndex = -1;
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const items = resultsBox.querySelectorAll('.search-result');
+      if (resultsBox.classList.contains('hidden') || items.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex + 1) % items.length;
+        updateSelection();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+        updateSelection();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < items.length) {
+          items[selectedIndex].click();
+        } else {
+          items[0].click();
+        }
+      } else if (e.key === 'Escape') {
+        resultsBox.classList.add('hidden');
+        input.blur();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!input.contains(e.target) && !resultsBox.contains(e.target)) {
+        resultsBox.classList.add('hidden');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement !== input) {
+        e.preventDefault();
+        input.focus();
+      }
+    });
+  </script>
+</body>
+</html>
