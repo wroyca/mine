@@ -17,7 +17,6 @@
 #include <boost/system/system_error.hpp>
 
 #include <mine/mine-async-loop.hxx>
-#include <mine/mine-terminal-input-impl.hxx>
 #include <mine/mine-terminal-input.hxx>
 
 #include <mine/mine-predefs.hxx>
