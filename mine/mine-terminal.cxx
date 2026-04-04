@@ -1,6 +1,4 @@
-
-#include <mine/mine-terminal-render.hxx>
-#include <mine/mine-contract.hxx>
+#include <mine/mine-terminal.hxx>
 #include <mine/mine-unicode.hxx>
 
 #include <iostream>
@@ -315,7 +313,7 @@ namespace mine
         }
 
         auto tv (cl.view ());
-        const auto& sg (cl.idx.get_segmentation ());
+        const auto& sg (cl.get_index ().get_segmentation ());
 
         // Render the text.
         //
@@ -620,7 +618,7 @@ namespace mine
       {
         const auto& l (bf.line_at (cu.line ()));
         auto tv (l.view ());
-        const auto& sg (l.idx.get_segmentation ());
+        const auto& sg (l.get_index ().get_segmentation ());
         auto rg (make_grapheme_range (sg));
 
         // We need to process 'target' number of graphemes.
@@ -725,8 +723,6 @@ namespace mine
     // DEC Private Mode 2026: End Synchronized Update (ESU).
     //
     // CSI ? 2026 l
-    //
-    // This flushes the buffered output to the screen atomically.
     //
     write ("\x1b[?2026l");
   }

@@ -14,8 +14,7 @@
 // #include <cpptrace/cpptrace.hpp>
 
 #include <mine/mine-editor-core.hxx>
-#include <mine/mine-terminal-raw.hxx>
-#include <mine/mine-terminal-render.hxx>
+#include <mine/mine-terminal.hxx>
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-async-input.hxx>
 #include <mine/mine-contract.hxx>

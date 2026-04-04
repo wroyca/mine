@@ -1,5 +1,5 @@
 #include <mine/mine-core-view.hxx>
-#include <mine/mine-terminal-render.hxx>
+#include <mine/mine-terminal.hxx>
 #include <mine/mine-unicode.hxx>
 
 namespace mine

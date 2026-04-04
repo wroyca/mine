@@ -151,6 +151,15 @@ namespace mine
         idx.update (view ());
       }
 
+      const grapheme_index&
+      get_index () const
+      {
+        if (!idx.valid ())
+          idx.update (view ());
+
+        return idx;
+      }
+
       std::size_t
       count () const
       {
