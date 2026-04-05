@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <compare>
+#include <functional>
 
 namespace mine
 {
@@ -237,9 +238,67 @@ namespace mine
   //
   using pixel_t       = float;
   using pixel_offset  = std::int32_t;
-  using texture_id    = std::uint32_t;
-  using shader_id     = std::uint32_t;
-  using buffer_id     = std::uint32_t;
+
+  // Editor identity types.
+  //
+
+  struct buffer_id
+  {
+    std::uint32_t value;
+
+    constexpr explicit
+    buffer_id (std::uint32_t v = 0) noexcept
+      : value (v)
+    {
+    }
+
+    constexpr auto
+    operator<=> (const buffer_id&) const = default;
+
+    constexpr buffer_id&
+    operator++ () noexcept
+    {
+      ++value;
+      return *this;
+    }
+
+    constexpr buffer_id
+    operator++ (int) noexcept
+    {
+      buffer_id r (*this);
+      ++value;
+      return r;
+    }
+  };
+
+  struct window_id
+  {
+    std::uint32_t value;
+
+    constexpr explicit
+    window_id (std::uint32_t v = 0) noexcept
+      : value (v)
+    {
+    }
+
+    constexpr auto
+    operator<=> (const window_id&) const = default;
+
+    constexpr window_id&
+    operator++ () noexcept
+    {
+      ++value;
+      return *this;
+    }
+
+    constexpr window_id
+    operator++ (int) noexcept
+    {
+      window_id r (*this);
+      ++value;
+      return r;
+    }
+  };
 
   // Handle types (opaque identifiers).
   //
@@ -309,3 +368,25 @@ namespace mine
     bool operator== (const uv_rect&) const = default;
   };
 }
+
+// Hash specializations for strong ID types.
+//
+template <>
+struct std::hash<mine::buffer_id>
+{
+  constexpr std::size_t
+  operator() (mine::buffer_id id) const noexcept
+  {
+    return std::hash<std::uint32_t> {} (id.value);
+  }
+};
+
+template <>
+struct std::hash<mine::window_id>
+{
+  constexpr std::size_t
+  operator() (mine::window_id id) const noexcept
+  {
+    return std::hash<std::uint32_t> {} (id.value);
+  }
+};

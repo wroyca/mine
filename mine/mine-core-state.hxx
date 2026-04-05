@@ -14,11 +14,8 @@
 
 namespace mine
 {
-  using buffer_id = std::uint32_t;
-  using window_id = std::uint32_t;
-
-  constexpr buffer_id invalid_buffer = 0;
-  constexpr window_id invalid_window = 0;
+  constexpr buffer_id invalid_buffer {0};
+  constexpr window_id invalid_window {0};
 
   // Command line state.
   //
@@ -343,8 +340,8 @@ namespace mine
     split_ptr layout_;
 
     window_id active_window_ {invalid_window};
-    buffer_id next_buffer_id_ {1};
-    window_id next_window_id_ {1};
+    buffer_id next_buffer_id_ {buffer_id {1}};
+    window_id next_window_id_ {window_id {1}};
     screen_size screen_size_ {24, 80};
 
     cmdline_state cmd_;

@@ -55,7 +55,7 @@ namespace mine
       // the initial unsaved text view isn't fundamentally broken when the user
       // starts pressing keys.
       //
-      files_[1] = file_buffer ();
+      files_[buffer_id {1}] = file_buffer ();
 
       print_handler_ = [this] (std::string_view msg)
       {

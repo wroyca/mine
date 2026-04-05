@@ -12,19 +12,19 @@ namespace mine
     : buffers_ (),
       windows_ (),
       layout_ (split_ptr (
-        split_node {true, 1, split_dir::vertical, 0.5f, nullptr, nullptr})),
-      active_window_ (1),
-      next_buffer_id_ (2),
-      next_window_id_ (2),
+        split_node {true, window_id {1}, split_dir::vertical, 0.5f, nullptr, nullptr})),
+      active_window_ (window_id {1}),
+      next_buffer_id_ (buffer_id {2}),
+      next_window_id_ (window_id {2}),
       cmd_ ()
   {
     // Bootstrap the initial state with a single empty buffer and a default
     // window layout.
     //
-    buffers_ = buffers_.set (1, buffer_state {make_empty_buffer (), false, ""});
+    buffers_ = buffers_.set (buffer_id {1}, buffer_state {make_empty_buffer (), false, ""});
     windows_ = windows_.set (
-      1,
-      window_state {1,
+      window_id {1},
+      window_state {buffer_id {1},
                     mine::cursor {},
                     mine::view {line_number (0), screen_size (24, 80)}});
   }
@@ -38,14 +38,14 @@ namespace mine
     : buffers_ (),
       windows_ (),
       layout_ (split_ptr (
-        split_node {true, 1, split_dir::vertical, 0.5f, nullptr, nullptr})),
-      active_window_ (1),
-      next_buffer_id_ (2),
-      next_window_id_ (2),
+        split_node {true, window_id {1}, split_dir::vertical, 0.5f, nullptr, nullptr})),
+      active_window_ (window_id {1}),
+      next_buffer_id_ (buffer_id {2}),
+      next_window_id_ (window_id {2}),
       cmd_ (move (cs))
   {
-    buffers_ = buffers_.set (1, buffer_state {move (b), m, ""});
-    windows_ = windows_.set (1, window_state {1, c, v});
+    buffers_ = buffers_.set (buffer_id {1}, buffer_state {move (b), m, ""});
+    windows_ = windows_.set (window_id {1}, window_state {buffer_id {1}, c, v});
   }
 
   // Traverse the binary split tree and resolve the absolute grid coordinates
