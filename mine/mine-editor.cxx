@@ -11,12 +11,9 @@ using namespace std;
 namespace mine
 {
   editor::
-  editor (async_loop& l, workspace s)
-    : h_ (move (s)),
-      l_ (&l)
+  editor (workspace s)
+    : h_ (std::move (s))
   {
-    files_[document_id {1}] = file_document ();
-
     print_handler_ = [this] (string_view msg)
     {
       show_message (string (msg));
@@ -214,53 +211,46 @@ namespace mine
   void editor::
   quit ()
   {
-    exit (0);
+    quit_requested_ = true;
   }
 
   void editor::
-  load (const string& path)
+  open_document (const string& path, content text)
   {
-    if (!l_)
-      return;
-
     document_id new_id (h_.current ().next_document_id ());
-    auto s (h_.current ().with_new_document (make_empty_content (),
-                                             path,
-                                             detect_language (path)));
+    auto s (h_.current ().with_new_document (
+      std::move (text), path, detect_language (path)));
 
     s = s.switch_document (new_id);
 
-    file_document fb;
-    auto[nfb, eff] (mine::load_file (move (fb), path));
-    files_[new_id] = move (nfb);
+    h_ = h_.push (std::move (s));
+    notify (change_hint::content);
+  }
 
-    h_ = h_.push (move (s));
-    run_io (move (eff), new_id);
+  void editor::
+  mark_saved (document_id id)
+  {
+    auto s (h_.current ().with_modified (false));
+    h_ = h_.replace_current (std::move (s));
     notify (change_hint::content);
   }
 
   void editor::
   save ()
   {
-    if (!l_)
-      return;
-
     document_id active_id (h_.current ().active_document_id ());
-    auto& fb (files_[active_id]);
+    auto const& doc (h_.current ().get_document (active_id));
 
-    if (!holds_alternative<existing_file> (fb.state))
+    if (doc.name.empty ())
     {
       show_message ("No file name");
       return;
     }
 
-    fb.text = h_.current ().active_content ();
-
-    auto[nfb, eff] (mine::save_file (move (fb)));
-    files_[active_id] = move (nfb);
-
-    run_io (move (eff), active_id);
-    notify (change_hint::content);
+    if (cb_save_)
+    {
+      cb_save_ (active_id, doc.name, h_.current ().active_content ());
+    }
   }
 
   void editor::
@@ -338,38 +328,5 @@ namespace mine
   {
     if (cb_change_)
       cb_change_ (h_.current (), h);
-  }
-
-  void editor::
-  run_io (io_effect eff, document_id id)
-  {
-    l_->post ([this, e = move (eff), id] () mutable
-    {
-      e ([this, id] (file_io_action a)
-      {
-        this->complete_io (id, move (a));
-      });
-    });
-  }
-
-  void editor::
-  complete_io (document_id id, const file_io_action& a)
-  {
-    auto& fb (files_[id]);
-    auto [nfb, msg] (update_file_document (move (fb), a));
-    fb = move (nfb);
-
-    if (fb.text != h_.current ().get_document (id).text)
-    {
-      auto s (h_.current ().update_document (id, fb.text));
-
-      h_ = h_.push (move (s));
-      notify (change_hint::content);
-    }
-
-    if (msg)
-    {
-      show_message (*msg);
-    }
   }
 }

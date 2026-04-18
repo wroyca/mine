@@ -7,10 +7,8 @@
 
 #include <lua.hpp>
 
-#include <mine/mine-async-loop.hxx>
 #include <mine/mine-command.hxx>
 #include <mine/mine-workspace.hxx>
-#include <mine/mine-io-file.hxx>
 #include <mine/mine-terminal-input.hxx>
 #include <mine/mine-utility.hxx>
 #include <mine/mine-vm-bridge.hxx>
@@ -41,11 +39,10 @@ namespace mine
   public:
     using change_callback = std::function<void (const workspace&, change_hint)>;
     using msg_callback = std::function<void (const std::string&)>;
+    using save_callback = std::function<void (document_id, std::string, content)>;
 
-    // We really need the loop to do anything useful (loading/saving).
-    //
     explicit
-    editor (async_loop& l, workspace s = workspace ());
+    editor (workspace s = workspace ());
 
     // State Access
     //
@@ -95,48 +92,42 @@ namespace mine
     void
     quit ();
 
-    // File I/O
+    // Document lifecycle.
     //
-    // This uses the "Side Effect" pattern. The IO functions return a pure
-    // tuple of [new_state, effect_closure]. We apply the state immediately,
-    // then schedule the closure on the async loop.
+    // These are called by the application layer after async I/O completes.
+    // The editor itself never initiates I/O.
     //
+    void
+    open_document (const std::string& path, content text);
 
     void
-    load (const std::string& path);
-
-    void
-    save ();
+    mark_saved (document_id id);
 
     // Queries & Callbacks
     //
 
     bool
-    dirty () const noexcept
+    quit_requested () const noexcept
     {
-      auto it (files_.find (h_.current ().active_document_id ()));
-      return it != files_.end () && it->second.is_dirty ();
+      return quit_requested_;
     }
 
     bool
-    io_busy () const noexcept
+    dirty () const noexcept
     {
-      auto it (files_.find (h_.current ().active_document_id ()));
-      return it != files_.end () && it->second.io_in_progress ();
+      return h_.current ().modified ();
     }
 
     std::optional<std::string>
     filename () const noexcept
     {
-      auto it (files_.find (h_.current ().active_document_id ()));
-      return it != files_.end () ? it->second.file_name () : std::nullopt;
-    }
+      auto const& doc (h_.current ().get_document (
+        h_.current ().active_document_id ()));
 
-    std::optional<float>
-    progress () const noexcept
-    {
-      auto it (files_.find (h_.current ().active_document_id ()));
-      return it != files_.end () ? it->second.progress_percent () : std::nullopt;
+      if (doc.name.empty ())
+        return std::nullopt;
+
+      return doc.name;
     }
 
     void
@@ -149,6 +140,12 @@ namespace mine
     on_message (msg_callback c)
     {
       cb_msg_ = std::move (c);
+    }
+
+    void
+    on_save (save_callback c)
+    {
+      cb_save_ = std::move (c);
     }
 
     // Display a transient message directly onto the command line prompt.
@@ -178,23 +175,20 @@ namespace mine
     notify (change_hint h);
 
     void
-    run_io (io_effect eff, document_id id);
+    save ();
 
-    void
-    complete_io (document_id id, const file_io_action& a);
+
 
   private:
     edit_history h_;
-    std::map<document_id, file_document> files_;
+    bool quit_requested_ {false};
 
-    async_loop* l_;
     vm vm_ {vm_limits::permissive()};
     std::map<input_event, std::string> keymaps_;
     std::function<void (std::string_view)> print_handler_;
 
     change_callback cb_change_;
     msg_callback cb_msg_;
+    save_callback cb_save_;
   };
-
-
 }

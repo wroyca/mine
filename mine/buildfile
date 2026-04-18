@@ -6,11 +6,14 @@ import                       libs += libimmer%lib{immer}
 import! [rule_hint=cxx.link] libs += lua%lib{lua}
 import! [rule_hint=cxx.link] libs += libtree-sitter%lib{tree-sitter}
 import                       libs += glfw%lib{glfw}
+import libs += liburing%lib{uring}
 
 exe{mine}: {hxx ixx txx cxx}{** -mine-version -mine-utility-*installed} \
            {hxx            }{    mine-version                         } \
            {h           c  }{**                                       } \
            $libs
+
+cxx.poptions += -DBOOST_ASIO_HAS_IO_URING
 
 # Link the appropriate utility object file depending on the build operation.
 #
