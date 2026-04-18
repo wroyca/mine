@@ -3,8 +3,6 @@
 #include <functional>
 #include <optional>
 #include <variant>
-#include <fstream>
-#include <sstream>
 #include <map>
 
 #include <lua.hpp>
@@ -47,21 +45,7 @@ namespace mine
     // We really need the loop to do anything useful (loading/saving).
     //
     explicit
-    core (async_loop& l, state s = state ())
-      : h_ (std::move (s)),
-        l_ (&l)
-    {
-      // Give the base setup a blank, fully functioning file buffer context so
-      // the initial unsaved text view isn't fundamentally broken when the user
-      // starts pressing keys.
-      //
-      files_[buffer_id {1}] = file_buffer ();
-
-      print_handler_ = [this] (std::string_view msg)
-      {
-        show_message (std::string (msg));
-      };
-    }
+    core (async_loop& l, state s = state ());
 
     // State Access
     //
@@ -76,206 +60,16 @@ namespace mine
     //
 
     void
-    bind_key (std::string_view chord, std::string_view action)
-    {
-      auto evt (parse_key_chord (chord));
-      if (evt)
-      {
-        keymaps_[*evt] = std::string (action);
-      }
-      else
-      {
-        show_message ("Invalid key chord for mapping: " + std::string (chord));
-      }
-    }
+    bind_key (std::string_view chord, std::string_view action);
 
     // Command Dispatch
     //
 
     void
-    dispatch (const command& cmd)
-    {
-      // Meta-commands that bypass standard state execution.
-      //
-      if (cmd.name () == "quit")
-      {
-        quit ();
-        return;
-      }
-
-      if (cmd.name () == "undo")
-      {
-        undo ();
-        return;
-      }
-
-      if (cmd.name () == "redo")
-      {
-        redo ();
-        return;
-      }
-
-      if (cmd.name () == "save")
-      {
-        save ();
-        return;
-      }
-
-      if (cmd.name () == "save_and_quit")
-      {
-        save ();
-        quit ();
-        return;
-      }
-
-      const auto& pre (h_.current ());
-      auto post (cmd.execute (pre));
-
-      if (cmd.name () == "close_window")
-      {
-        std::vector<window_layout> lays;
-        pre.get_layout (lays, 100, 100);
-
-        // If we only have one layout segment open, attempting to close it
-        // implies the user wants to terminate the application entirely.
-        //
-        if (lays.size () <= 1)
-        {
-          quit ();
-          return;
-        }
-
-        h_ = h_.replace_current (post);
-        notify (change_hint::view);
-        return;
-      }
-
-      if (post.cmdline ().is_submitted)
-      {
-        std::string a (post.cmdline ().content);
-
-        // Deactivate and clear the command line state before we execute the
-        // action.
-        //
-        auto c (post.cmdline ());
-        c.active = false;
-        c.is_submitted = false;
-        c.content.clear ();
-        c.cursor_pos = 0;
-
-        post = post.with_cmdline (c);
-        h_ = h_.replace_current (std::move (post));
-
-        // Delegate to the command interface to parse the string.
-        //
-        auto pc (parse_cmdline (a));
-
-        if (pc)
-        {
-          dispatch (*pc);
-        }
-        else
-        {
-          // We didn't recognize the command. Figure out if the user actually
-          // typed something or if they just hit enter on a bunch of whitespace.
-          //
-          auto b (a.find_first_not_of (" \t"));
-
-          if (b != std::string::npos)
-          {
-            auto e (a.find_last_not_of (" \t"));
-            auto t (a.substr (b, e - b + 1));
-
-            show_message ("Unknown command: " + t);
-          }
-          else
-          {
-            // The input was effectively empty, so just force the UI to redraw
-            // and clear out the line.
-            //
-            notify (change_hint::selection);
-          }
-        }
-
-        return;
-      }
-
-      change_hint hint;
-
-      if (cmd.modifies_buffer (pre))
-      {
-        // Text edits are destructive. We push a new state to the history
-        // stack so the user can undo them.
-        //
-        hint = change_hint::content;
-        h_ = h_.push (std::move (post));
-      }
-      else if (pre.view () != post.view () || cmd.name () == "split_window")
-      {
-        // View changes (scrolling) are significant enough to warrant an
-        // undo entry? Debatable. For now, yes, to allow jumping back to
-        // previous context.
-        //
-        hint = change_hint::view;
-        h_ = h_.push (std::move (post));
-      }
-      else if (pre.get_cursor () != post.get_cursor () ||
-               pre.cmdline () != post.cmdline () ||
-               pre.active_window () != post.active_window ())
-      {
-        // Cursor movement or cmdline activity.
-        //
-        // If either the previous state or the new state has an active selection
-        // mark, or if we typed in the cmdline, it means the visual state
-        // changed. We must force a full redraw via 'selection'.
-        //
-        if (pre.get_cursor ().has_mark () ||
-            post.get_cursor ().has_mark () ||
-            pre.cmdline () != post.cmdline ())
-          hint = change_hint::selection;
-        else
-          hint = change_hint::cursor;
-
-        // Note that we replace the current node. We explicitly do not want
-        // to spam the undo stack with hundreds of states while the user is
-        // dragging the mouse to select text or typing in the cmdline.
-        //
-        h_ = h_.replace_current (std::move (post));
-      }
-      else
-      {
-        // The command executed but resulted in the exact same state (e.g.,
-        // hitting Left Arrow when already at line 0, column 0). We just
-        // drop it and skip the render cycle.
-        //
-        return;
-      }
-
-      notify (hint);
-    }
+    dispatch (const command& cmd);
 
     void
-    handle_input (const input_event& e)
-    {
-      // First check user-defined key bindings.
-      //
-      if (auto it = keymaps_.find (e); it != keymaps_.end ())
-      {
-        auto c = make_command_by_name (it->second);
-        if (c)
-        {
-          dispatch (*c);
-          return;
-        }
-      }
-
-      // Fallback to the standard command mappings.
-      //
-      auto c (make_command (e));
-
-      if (c)
-        dispatch (*c);
-    }
+    handle_input (const input_event& e);
 
     // History
     //
@@ -293,38 +87,13 @@ namespace mine
     }
 
     void
-    undo ()
-    {
-      if (can_undo ())
-      {
-        h_ = h_.undo ();
-        notify (change_hint::content);
-      }
-      else
-      {
-        show_message ("Already at oldest change");
-      }
-    }
+    undo ();
 
     void
-    redo ()
-    {
-      if (can_redo ())
-      {
-        h_ = h_.redo ();
-        notify (change_hint::content);
-      }
-      else
-      {
-        show_message ("Already at newest change");
-      }
-    }
+    redo ();
 
     void
-    quit ()
-    {
-      exit (0);
-    }
+    quit ();
 
     // File I/O
     //
@@ -334,51 +103,10 @@ namespace mine
     //
 
     void
-    load (const std::string& path)
-    {
-      if (!l_)
-        return;
-
-      buffer_id new_id (h_.current ().next_buffer_id ());
-      auto s (h_.current ().with_new_buffer (make_empty_buffer (), path));
-
-      // Switch the active window's underlying view target over to the newly
-      // generated buffer space context before initiating IO logic.
-      //
-      s = s.switch_buffer (new_id);
-
-      file_buffer fb;
-      auto[nfb, eff] (mine::load_file (std::move (fb), path));
-      files_[new_id] = std::move (nfb);
-
-      h_ = h_.push (std::move (s));
-      run_io (std::move (eff), new_id);
-      notify (change_hint::content);
-    }
+    load (const std::string& path);
 
     void
-    save ()
-    {
-      if (!l_)
-        return;
-
-      buffer_id active_id (h_.current ().active_buffer_id ());
-      auto& fb (files_[active_id]);
-
-      if (!std::holds_alternative<existing_file> (fb.state))
-      {
-        show_message ("No file name");
-        return;
-      }
-
-      fb.content = h_.current ().buffer ();
-
-      auto[nfb, eff] (mine::save_file (std::move (fb)));
-      files_[active_id] = std::move (nfb);
-
-      run_io (std::move (eff), active_id);
-      notify (change_hint::content);
-    }
+    save ();
 
     // Queries & Callbacks
     //
@@ -426,82 +154,12 @@ namespace mine
     // Display a transient message directly onto the command line prompt.
     //
     void
-    show_message (const std::string& m)
-    {
-      auto s (h_.current ().with_cmdline_message (m));
-      h_ = h_.replace_current (std::move (s));
-      notify (change_hint::selection);
-
-      // Pass it down to the callback if anyone is listening.
-      //
-      if (cb_msg_)
-        cb_msg_ (m);
-    }
+    show_message (const std::string& m);
 
     // Scripting configuration initialization.
     //
     void
-    load_config ()
-    {
-      vm_.initialize ();
-      vm_.set_print_handler (&print_handler_);
-      vm_.set_global_userdata ("__mine_core", this);
-
-      register_core_api (vm_);
-
-      // Now bootstrap Fennel. We need to read the compiler from the install
-      // data directory and evaluate it directly into the VM.
-      //
-      std::filesystem::path fp (build_install_data / "fennel.lua");
-      std::ifstream f (fp, std::ios::binary);
-
-      if (f)
-      {
-        std::ostringstream s;
-        s << f.rdbuf ();
-
-        auto r (vm_.load_fennel (s.str ()));
-
-        if (!r)
-        {
-          show_message ("Fennel load error: " + *r.error);
-          return;
-        }
-
-        // Set up the package path for Fennel. We want the user to be able to
-        // require other .fnl files from their config directory, so we inject it
-        // into the search path.
-        //
-        auto cd (get_user_config_dir ());
-
-        if (cd)
-        {
-          std::string p ((*cd / "?.fnl").string ());
-          vm_.add_fennel_path (p);
-        }
-
-        // Evaluate the main configuration file if it actually exists.
-        //
-        auto cf (get_user_config_file ());
-
-        if (cf && std::filesystem::exists (*cf))
-        {
-          auto er (vm_.execute_fennel_file (cf->string ()));
-
-          if (!er)
-          {
-            show_message ("Config error: " + *er.error);
-          }
-        }
-      }
-      else
-      {
-        // Warn the user. They might be running from a weird prefix where the
-        // data files are missing.
-        //
-        show_message ("Warning: fennel.lua not found at " + fp.string ());
-      }
-    }
+    load_config ();
 
     // Handle terminal window resize.
     //
@@ -513,60 +171,17 @@ namespace mine
     // the user to have to hit Undo to revert a window resize.
     //
     void
-    resize (screen_size s)
-    {
-      auto ns (h_.current ().resize_layout (s));
-      h_ = h_.replace_current (std::move (ns));
-      notify (change_hint::view);
-    }
+    resize (screen_size s);
 
   private:
     void
-    notify (change_hint h)
-    {
-      if (cb_change_)
-        cb_change_ (h_.current (), h);
-    }
+    notify (change_hint h);
 
-    // Run the IO effect on the async loop.
-    //
     void
-    run_io (io_effect eff, buffer_id id)
-    {
-      l_->post ([this, e = std::move (eff), id] () mutable
-      {
-        e ([this, id] (file_io_action a)
-        {
-          this->complete_io (id, std::move (a));
-        });
-      });
-    }
+    run_io (io_effect eff, buffer_id id);
 
-    // Callback from the IO thread (back on the main thread via post).
-    //
     void
-    complete_io (buffer_id id, const file_io_action& a)
-    {
-      auto& fb (files_[id]);
-      auto [nfb, msg] (update_file_buffer (std::move (fb), a));
-      fb = std::move (nfb);
-
-      if (fb.content != h_.current ().get_buffer (id).content)
-      {
-        auto s (h_.current ().update_buffer (id, fb.content));
-
-        // We push onto history here because asynchronous IO stream events that
-        // alter memory represent hard content transitions to the user.
-        //
-        h_ = h_.push (std::move (s));
-        notify (change_hint::content);
-      }
-
-      if (msg)
-      {
-        show_message (*msg);
-      }
-    }
+    complete_io (buffer_id id, const file_io_action& a);
 
   private:
     history h_;
