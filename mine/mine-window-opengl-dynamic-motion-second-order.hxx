@@ -1,10 +1,11 @@
 #pragma once
 
-#include <mine/mine-contract.hxx>
 #include <mine/mine-window-opengl-composition-linear-algebra-vec.hxx>
 
 #include <cmath>
 #include <algorithm>
+
+#include <mine/mine-contract.hxx>
 
 namespace mine
 {

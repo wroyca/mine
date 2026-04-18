@@ -8,8 +8,6 @@
 #include <vector>
 
 #include <mine/mine-types.hxx>
-#include <mine/mine-contract.hxx>
-#include <mine/mine-predefs.hxx>
 
 // Forward declare Lua state (no Lua headers in public API).
 //
@@ -106,17 +104,11 @@ namespace mine
     explicit
     vm (vm_limits limits = vm_limits::default_limits ());
 
-    vm (const vm&)
-      = MINE_CPP_DELETED_FUNCTION("vm manages unique execution state and hardware resources that cannot be duplicated");
+    vm (const vm&) = delete;
+    vm& operator= (const vm&) = delete;
 
-    vm& operator= (const vm&)
-      = MINE_CPP_DELETED_FUNCTION("vm manages unique execution state and hardware resources that cannot be duplicated");
-
-    vm (vm&&)
-      = MINE_CPP_DELETED_FUNCTION("vm contains internal self-references and stable memory mappings that prevent moving");
-
-    vm& operator= (vm&&)
-      = MINE_CPP_DELETED_FUNCTION("vm contains internal self-references and stable memory mappings that prevent moving");
+    vm (vm&&) = delete;
+    vm& operator= (vm&&) = delete;
 
     ~vm ();
 

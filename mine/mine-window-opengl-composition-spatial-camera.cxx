@@ -1,7 +1,8 @@
 #include <mine/mine-window-opengl-composition-spatial-camera.hxx>
-#include <mine/mine-contract.hxx>
 
 #include <algorithm>
+
+using namespace std;
 
 namespace mine
 {
@@ -35,13 +36,13 @@ namespace mine
     // Clamp the zoom to a sensible range to avoid singularity or flipping the
     // projection matrix.
     //
-    z_.reset (std::clamp (z, 0.1f, 10.0f));
+    z_.reset (clamp (z, 0.1f, 10.0f));
   }
 
   void camera_2d::
   set_zoom_smooth (float z)
   {
-    z_.set_target (std::clamp (z, 0.1f, 10.0f));
+    z_.set_target (clamp (z, 0.1f, 10.0f));
   }
 
   void camera_2d::
@@ -58,8 +59,8 @@ namespace mine
     // Restrict the vertical scrolling to the provided boundaries while making
     // sure that we never pan past the left edge.
     //
-    t.y = std::clamp (t.y, mn, mx);
-    t.x = std::max (t.x, 0.0f);
+    t.y = clamp (t.y, mn, mx);
+    t.x = max (t.x, 0.0f);
 
     p_.set_target (t);
   }
@@ -87,8 +88,8 @@ namespace mine
 
     // Finally, prevent the camera from wandering into negative space.
     //
-    t.x = std::max (t.x, 0.0f);
-    t.y = std::max (t.y, 0.0f);
+    t.x = max (t.x, 0.0f);
+    t.y = max (t.y, 0.0f);
 
     p_.set_target (t);
   }
@@ -112,7 +113,7 @@ namespace mine
     //
     mat4 p (mat4::ortho (0.0f, vp_.x, vp_.y, 0.0f, -1.0f, 1.0f));
 
-    // Notice that we  leave out sub-pixel snapping (e.g., via std::round) here.
+    // Notice that we  leave out sub-pixel snapping (e.g., via round) here.
     // While snapping might prevent texture filtering artifacts, it completely
     // ruins the perception of smooth motion at lower speeds and introduces
     // visible stuttering. Instead, we rely on standard bilinear filtering to do

@@ -1,5 +1,6 @@
 #include <mine/mine-window-opengl-dynamic-state-timer.hxx>
-#include <mine/mine-contract.hxx>
+
+using namespace std;
 
 namespace mine
 {
@@ -7,13 +8,13 @@ namespace mine
   current_time_seconds ()
   {
     time_point n (clock::now ());
-    return std::chrono::duration<float> (n.time_since_epoch ()).count ();
+    return chrono::duration<float> (n.time_since_epoch ()).count ();
   }
 
   float
   delta_time (time_point s, time_point e)
   {
-    return std::chrono::duration<float> (e - s).count ();
+    return chrono::duration<float> (e - s).count ();
   }
 
   frame_timer::

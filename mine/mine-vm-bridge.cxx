@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-#include <mine/mine-editor-core.hxx>
+#include <mine/mine-editor.hxx>
 
 using namespace std;
 
@@ -17,9 +17,9 @@ namespace mine
 
     api_family f (bindings);
 
-    f["bind"] += MINE_BIND (&core::bind_key);
-    f["message"] += MINE_BIND (&core::show_message);
-    f["quit"] += MINE_BIND (&core::quit);
+    f["bind"] += MINE_BIND (&editor::bind_key);
+    f["message"] += MINE_BIND (&editor::show_message);
+    f["quit"] += MINE_BIND (&editor::quit);
 
     v.register_module ("mine", bindings);
   }

@@ -19,8 +19,6 @@
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-terminal-input.hxx>
 
-#include <mine/mine-predefs.hxx>
-
 namespace mine
 {
   // Asynchronous terminal input reader.
@@ -38,19 +36,11 @@ namespace mine
     explicit
     async_input (async_loop& l, event_callback e);
 
-    async_input (const async_input&) = MINE_CPP_DELETED_FUNCTION (
-      "async_input captures 'this' and cannot be copied");
+    async_input (const async_input&) = delete;
+    async_input (async_input&&) = delete;
 
-    async_input (async_input&&) = MINE_CPP_DELETED_FUNCTION (
-      "async_input captures 'this' and cannot be moved");
-
-    async_input&
-    operator = (const async_input&) = MINE_CPP_DELETED_FUNCTION (
-      "async_input captures 'this' and cannot be copied");
-
-    async_input&
-    operator = (async_input&&) = MINE_CPP_DELETED_FUNCTION (
-      "async_input captures 'this' and cannot be moved");
+    async_input& operator = (const async_input&) = delete;
+    async_input& operator = (async_input&&) = delete;
 
     ~async_input ();
 

@@ -1,6 +1,6 @@
 #include <mine/mine-command.hxx>
 
-#include <mine/mine-core-view.hxx>
+#include <mine/mine-viewport.hxx>
 #include <algorithm>
 
 using namespace std;
@@ -67,8 +67,8 @@ namespace mine
     if (name == "paste")               return make_unique<paste_command> ();
     if (name == "toggle_cmdline")      return make_unique<toggle_cmdline_command> ();
     if (name == "escape")              return make_unique<escape_command> ();
-    if (name == "split_horizontal")    return make_unique<split_window_command> (split_dir::horizontal);
-    if (name == "split_vertical")      return make_unique<split_window_command> (split_dir::vertical);
+    if (name == "split_horizontal")    return make_unique<split_window_command> (layout_direction::horizontal);
+    if (name == "split_vertical")      return make_unique<split_window_command> (layout_direction::vertical);
     if (name == "close_window")        return make_unique<close_window_command> ();
     if (name == "switch_window_up")    return make_unique<switch_window_command> (0, -1);
     if (name == "switch_window_down")  return make_unique<switch_window_command> (0, 1);
@@ -228,16 +228,16 @@ namespace mine
       return make_unique<redo_command> ();
 
     if (trimmed == "sp" || trimmed == "split")
-      return make_unique<split_window_command> (split_dir::horizontal);
+      return make_unique<split_window_command> (layout_direction::horizontal);
 
     if (trimmed == "vs" || trimmed == "vsplit")
-      return make_unique<split_window_command> (split_dir::vertical);
+      return make_unique<split_window_command> (layout_direction::vertical);
 
     return nullptr;
   }
 
-  mine::editor_state copy_command::
-  execute (const editor_state& s) const
+  mine::workspace copy_command::
+  execute (const workspace& s) const
   {
     auto c (s.get_cursor ());
 
@@ -252,8 +252,8 @@ namespace mine
       // Step the end forward. Cell highlighting is inclusive so we need to
       // grab the character under the cursor too.
       //
-      auto e (cursor (p2).move_right (s.buffer ()).position ());
-      string t (s.buffer ().get_range (p1, e));
+      auto e (cursor (p2).move_right (s.active_content ()).position ());
+      string t (s.active_content ().get_range (p1, e));
       set_clipboard_text (t);
 
       // Clear the mark. This gives the user visual feedback that the text was
@@ -272,13 +272,13 @@ namespace mine
   }
 
   bool mine::copy_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  mine::editor_state mine::paste_command::
-  execute (const editor_state& s) const
+  mine::workspace mine::paste_command::
+  execute (const workspace& s) const
   {
     // Grab the clipboard text. Bail out early if there is nothing
     // to do.
@@ -298,7 +298,7 @@ namespace mine
       return s.with_cmdline (cmd);
     }
 
-    auto b (s.buffer ());
+    auto b (s.active_content ());
     auto c (s.get_cursor ());
 
     // If there is an active selection, pasting should just blast
@@ -365,13 +365,13 @@ namespace mine
   }
 
   bool mine::paste_command::
-  modifies_buffer (const editor_state& s) const noexcept
+  modifies_buffer (const workspace& s) const noexcept
   {
     return !s.cmdline ().active;
   }
 
-  editor_state delete_backward_command::
-  execute (const editor_state& s) const
+  workspace delete_backward_command::
+  execute (const workspace& s) const
   {
     if (s.cmdline ().active)
     {
@@ -385,7 +385,7 @@ namespace mine
       return s.with_cmdline (cmd);
     }
 
-    auto b (s.buffer ());
+    auto b (s.active_content ());
     auto c (s.get_cursor ());
 
     // See if we have an active selection. If so, backspace simply deletes the
@@ -441,13 +441,13 @@ namespace mine
   }
 
   bool delete_backward_command::
-  modifies_buffer (const editor_state& s) const noexcept
+  modifies_buffer (const workspace& s) const noexcept
   {
     return !s.cmdline ().active;
   }
 
-  editor_state delete_forward_command::
-  execute (const editor_state& s) const
+  workspace delete_forward_command::
+  execute (const workspace& s) const
   {
     if (s.cmdline ().active)
     {
@@ -460,7 +460,7 @@ namespace mine
       return s.with_cmdline (cmd);
     }
 
-    auto b (s.buffer ());
+    auto b (s.active_content ());
     auto c (s.get_cursor ());
 
     // See if we have an active selection. If so, delete simply removes
@@ -518,7 +518,7 @@ namespace mine
   }
 
   bool delete_forward_command::
-  modifies_buffer (const editor_state& s) const noexcept
+  modifies_buffer (const workspace& s) const noexcept
   {
     return !s.cmdline ().active;
   }
@@ -529,8 +529,8 @@ namespace mine
   {
   }
 
-  editor_state insert_text_command::
-  execute (const editor_state& s) const
+  workspace insert_text_command::
+  execute (const workspace& s) const
   {
     if (s.cmdline ().active)
     {
@@ -540,7 +540,7 @@ namespace mine
       return s.with_cmdline (cmd);
     }
 
-    auto b (s.buffer ());
+    auto b (s.active_content ());
     auto c (s.get_cursor ());
 
     // See if we have an active selection. If so, typing replaces the marked
@@ -593,13 +593,13 @@ namespace mine
   }
 
   bool insert_text_command::
-  modifies_buffer (const editor_state& s) const noexcept
+  modifies_buffer (const workspace& s) const noexcept
   {
     return !s.cmdline ().active;
   }
 
-  editor_state insert_newline_command::
-  execute (const editor_state& s) const
+  workspace insert_newline_command::
+  execute (const workspace& s) const
   {
     if (s.cmdline ().active)
     {
@@ -608,7 +608,7 @@ namespace mine
       return s.with_cmdline (cmd);
     }
 
-    auto b (s.buffer ());
+    auto b (s.active_content ());
     auto c (s.get_cursor ());
 
     // See if we have an active selection. If so, hitting enter replaces the
@@ -649,7 +649,7 @@ namespace mine
   }
 
   bool insert_newline_command::
-  modifies_buffer (const editor_state& s) const noexcept
+  modifies_buffer (const workspace& s) const noexcept
   {
     return !s.cmdline ().active;
   }
@@ -661,8 +661,8 @@ namespace mine
   {
   }
 
-  editor_state move_cursor_command::
-  execute (const editor_state& s) const
+  workspace move_cursor_command::
+  execute (const workspace& s) const
   {
     if (s.cmdline ().active)
     {
@@ -690,7 +690,7 @@ namespace mine
       return s.with_cmdline (cmd);
     }
 
-    const auto& b (s.buffer ());
+    const auto& b (s.active_content ());
     const auto& c (s.get_cursor ());
 
     // Handle viewport scrolling first.
@@ -756,13 +756,13 @@ namespace mine
   }
 
   bool move_cursor_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state save_command::
-  execute (const editor_state& s) const
+  workspace save_command::
+  execute (const workspace& s) const
   {
     return s;
   }
@@ -774,13 +774,13 @@ namespace mine
   }
 
   bool save_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state save_and_quit_command::
-  execute (const editor_state& s) const
+  workspace save_and_quit_command::
+  execute (const workspace& s) const
   {
     return s;
   }
@@ -792,15 +792,15 @@ namespace mine
   }
 
   bool save_and_quit_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state quit_command::
-  execute (const editor_state& s) const
+  workspace quit_command::
+  execute (const workspace& s) const
   {
-    // Meta-command: implementation is bypassed by editor_core::dispatch
+    // Meta-command: implementation is bypassed by editor::dispatch
     //
     return s;
   }
@@ -812,15 +812,15 @@ namespace mine
   }
 
   bool quit_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state redo_command::
-  execute (const editor_state& s) const
+  workspace redo_command::
+  execute (const workspace& s) const
   {
-    // Meta-command: implementation is bypassed by editor_core::dispatch.
+    // Meta-command: implementation is bypassed by editor::dispatch.
     //
     return s;
   }
@@ -832,7 +832,7 @@ namespace mine
   }
 
   bool redo_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
@@ -844,16 +844,16 @@ namespace mine
   {
   }
 
-  editor_state begin_selection_command::
-  execute (const editor_state& s) const
+  workspace begin_selection_command::
+  execute (const workspace& s) const
   {
-    vector<window_layout> lays;
+    vector<window_partition> lays;
     s.get_layout (lays,
                   s.global_size ().cols,
                   s.global_size ().rows > 0 ? s.global_size ().rows - 1 : 0);
 
     window_id hit (s.active_window ());
-    const window_layout* lay (nullptr);
+    const window_partition* lay (nullptr);
 
     // Resolve which specific split physically received the mouse click so
     // we accurately map the coordinate space into the corresponding buffer.
@@ -885,7 +885,7 @@ namespace mine
     if (lay)
     {
       screen_position sp (y_ - lay->y, x_ - lay->x);
-      auto p (ns.view ().screen_to_buffer (sp, ns.buffer ()));
+      auto p (ns.view ().screen_to_buffer (sp, ns.active_content ()));
       auto c (ns.get_cursor ().move_to (p));
       c.set_mark ();
       return ns.with_cursor (c);
@@ -901,7 +901,7 @@ namespace mine
   }
 
   bool begin_selection_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
@@ -913,15 +913,15 @@ namespace mine
   {
   }
 
-  editor_state update_selection_command::
-  execute (const editor_state& s) const
+  workspace update_selection_command::
+  execute (const workspace& s) const
   {
-    vector<window_layout> lays;
+    vector<window_partition> lays;
     s.get_layout (lays,
                   s.global_size ().cols,
                   s.global_size ().rows > 0 ? s.global_size ().rows - 1 : 0);
 
-    const window_layout* lay (nullptr);
+    const window_partition* lay (nullptr);
 
     for (const auto& l : lays)
     {
@@ -937,7 +937,7 @@ namespace mine
       screen_position sp (y_ > lay->y ? y_ - lay->y : 0,
                           x_ > lay->x ? x_ - lay->x : 0);
 
-      auto p (s.view ().screen_to_buffer (sp, s.buffer ()));
+      auto p (s.view ().screen_to_buffer (sp, s.active_content ()));
       auto c (s.get_cursor ().move_to (p));
       return s.with_cursor (c);
     }
@@ -952,7 +952,7 @@ namespace mine
   }
 
   bool update_selection_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
@@ -964,8 +964,8 @@ namespace mine
   {
   }
 
-  editor_state end_selection_command::
-  execute (const editor_state& s) const
+  workspace end_selection_command::
+  execute (const workspace& s) const
   {
     // For many editors, releasing the mouse button doesn't actually change the
     // internal cursor state; the selection remains active until a keyboard
@@ -984,15 +984,15 @@ namespace mine
   }
 
   bool end_selection_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state undo_command::
-  execute (const editor_state& s) const
+  workspace undo_command::
+  execute (const workspace& s) const
   {
-    // Meta-command: implementation is bypassed by editor_core::dispatch
+    // Meta-command: implementation is bypassed by editor::dispatch
     //
     return s;
   }
@@ -1004,13 +1004,13 @@ namespace mine
   }
 
   bool undo_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state toggle_cmdline_command::
-  execute (const editor_state& s) const
+  workspace toggle_cmdline_command::
+  execute (const workspace& s) const
   {
     auto cmd (s.cmdline ());
     cmd.active = !cmd.active;
@@ -1031,13 +1031,13 @@ namespace mine
   }
 
   bool toggle_cmdline_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state escape_command::
-  execute (const editor_state& s) const
+  workspace escape_command::
+  execute (const workspace& s) const
   {
     // If the cmdline is active, pressing escape cancels it and clears it out.
     //
@@ -1064,19 +1064,19 @@ namespace mine
   }
 
   bool escape_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
   split_window_command::
-  split_window_command (split_dir d)
+  split_window_command (layout_direction d)
     : d_ (d)
   {
   }
 
-  editor_state split_window_command::
-  execute (const editor_state& s) const
+  workspace split_window_command::
+  execute (const workspace& s) const
   {
     return s.split_active_window (d_);
   }
@@ -1088,7 +1088,7 @@ namespace mine
   }
 
   bool split_window_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
@@ -1100,8 +1100,8 @@ namespace mine
   {
   }
 
-  editor_state switch_window_command::
-  execute (const editor_state& s) const
+  workspace switch_window_command::
+  execute (const workspace& s) const
   {
     return s.switch_window (dx_, dy_);
   }
@@ -1113,13 +1113,13 @@ namespace mine
   }
 
   bool switch_window_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }
 
-  editor_state close_window_command::
-  execute (const editor_state& s) const
+  workspace close_window_command::
+  execute (const workspace& s) const
   {
     return s.close_active_window ();
   }
@@ -1131,7 +1131,7 @@ namespace mine
   }
 
   bool close_window_command::
-  modifies_buffer (const editor_state&) const noexcept
+  modifies_buffer (const workspace&) const noexcept
   {
     return false;
   }

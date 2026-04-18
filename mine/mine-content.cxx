@@ -1,17 +1,19 @@
-#include <mine/mine-core-buffer.hxx>
+#include <mine/mine-content.hxx>
+
+#include <mine/mine-contract.hxx>
 
 using namespace std;
 
 namespace mine
 {
-  text_buffer::line::
+  content::line::
   line (immer::flex_vector<char> d)
-    : data (std::move (d))
+    : data (move (d))
   {
     update_idx ();
   }
 
-  text_buffer::line::
+  content::line::
   line (string_view s)
     : data (s.begin (), s.end ()),
       str_cache (s),
@@ -20,15 +22,15 @@ namespace mine
     update_idx ();
   }
 
-  text_buffer::line::
+  content::line::
   line (const line& x)
     : data (x.data)
   {
     update_idx ();
   }
 
-  text_buffer::line&
-  text_buffer::line::
+  content::line&
+  content::line::
   operator= (const line& x)
   {
     if (this != &x)
@@ -40,36 +42,36 @@ namespace mine
     return *this;
   }
 
-  text_buffer::line::
+  content::line::
   line (line&& x) noexcept
-    : data (std::move (x.data)),
-      str_cache (std::move (x.str_cache)),
+    : data (move (x.data)),
+      str_cache (move (x.str_cache)),
       str_valid (x.str_valid),
-      idx (std::move (x.idx))
+      idx (move (x.idx))
   {
   }
 
-  text_buffer::line&
-  text_buffer::line::
+  content::line&
+  content::line::
   operator= (line&& x) noexcept
   {
     if (this != &x)
     {
-      data = std::move (x.data);
-      str_cache = std::move (x.str_cache);
+      data = move (x.data);
+      str_cache = move (x.str_cache);
       str_valid = x.str_valid;
-      idx = std::move (x.idx);
+      idx = move (x.idx);
     }
     return *this;
   }
 
-  bool text_buffer::line::
+  bool content::line::
   operator== (const line& x) const
   {
     return data == x.data;
   }
 
-  string_view text_buffer::line::
+  string_view content::line::
   view () const
   {
     if (!str_valid)
@@ -86,13 +88,13 @@ namespace mine
     return str_cache;
   }
 
-  void text_buffer::line::
+  void content::line::
   update_idx ()
   {
     idx.update (view ());
   }
 
-  const grapheme_index& text_buffer::line::
+  const grapheme_index& content::line::
   get_index () const
   {
     if (!idx.valid ())
@@ -101,13 +103,13 @@ namespace mine
     return idx;
   }
 
-  size_t text_buffer::line::
+  size_t content::line::
   count () const
   {
     return idx.size ();
   }
 
-  optional<string_view> text_buffer::
+  optional<string_view> content::
   grapheme_at (cursor_position p) const
   {
     if (!contains (p.line))
@@ -122,7 +124,7 @@ namespace mine
     return c->text (l.view ());
   }
 
-  text_buffer text_buffer::
+  content content::
   insert_graphemes (cursor_position p, string_view s) const
   {
     MINE_PRECONDITION (contains (p.line));
@@ -138,12 +140,12 @@ namespace mine
     immer::flex_vector<char> v (s.begin (), s.end ());
 
     auto t (pre + v + suf);
-    line nl (std::move (t));
+    line nl (move (t));
 
-    return text_buffer (lines_.set (p.line.value, std::move (nl)));
+    return content (lines_.set (p.line.value, move (nl)));
   }
 
-  text_buffer text_buffer::
+  content content::
   delete_previous_grapheme (cursor_position p) const
   {
     MINE_PRECONDITION (contains (p.line));
@@ -163,12 +165,12 @@ namespace mine
 
     auto t (l.data.erase (c->byte_offset,
                           c->byte_offset + c->byte_length));
-    line nl (std::move (t));
+    line nl (move (t));
 
-    return text_buffer (lines_.set (p.line.value, std::move (nl)));
+    return content (lines_.set (p.line.value, move (nl)));
   }
 
-  text_buffer text_buffer::
+  content content::
   delete_next_grapheme (cursor_position p) const
   {
     MINE_PRECONDITION (contains (p.line));
@@ -188,12 +190,12 @@ namespace mine
 
     auto t (l.data.erase (c->byte_offset,
                           c->byte_offset + c->byte_length));
-    line nl (std::move (t));
+    line nl (move (t));
 
-    return text_buffer (lines_.set (p.line.value, std::move (nl)));
+    return content (lines_.set (p.line.value, move (nl)));
   }
 
-  text_buffer text_buffer::
+  content content::
   insert_newline (cursor_position p) const
   {
     MINE_PRECONDITION (contains (p.line));
@@ -206,17 +208,17 @@ namespace mine
     auto lhs (l.data.take (n));
     auto rhs (l.data.drop (n));
 
-    line ll (std::move (lhs));
-    line rl (std::move (rhs));
+    line ll (move (lhs));
+    line rl (move (rhs));
 
     auto r (lines_);
-    r = r.set (p.line.value, std::move (ll));
-    r = r.insert (p.line.value + 1, std::move (rl));
+    r = r.set (p.line.value, move (ll));
+    r = r.insert (p.line.value + 1, move (rl));
 
-    return text_buffer (std::move (r));
+    return content (move (r));
   }
 
-  text_buffer text_buffer::
+  content content::
   delete_range (cursor_position b, cursor_position e) const
   {
     MINE_PRECONDITION (b.line.value <= e.line.value);
@@ -234,9 +236,9 @@ namespace mine
       size_t e_off (l.idx.index_to_byte (e.column.value));
 
       auto t (l.data.erase (b_off, e_off));
-      line nl (std::move (t));
+      line nl (move (t));
 
-      return text_buffer (lines_.set (b.line.value, std::move (nl)));
+      return content (lines_.set (b.line.value, move (nl)));
     }
 
     const auto& bl (lines_[b.line.value]);
@@ -249,17 +251,17 @@ namespace mine
     auto suf (el.data.drop (e_off));
 
     auto t (pre + suf);
-    line nl (std::move (t));
+    line nl (move (t));
 
-    auto r (lines_.set (b.line.value, std::move (nl)));
+    auto r (lines_.set (b.line.value, move (nl)));
 
     auto r_pre (r.take (b.line.value + 1));
     auto r_suf (r.drop (e.line.value + 1));
 
-    return text_buffer (r_pre + r_suf);
+    return content (r_pre + r_suf);
   }
 
-  string text_buffer::
+  string content::
   get_range (cursor_position b, cursor_position e) const
   {
     MINE_PRECONDITION (b.line.value <= e.line.value);
@@ -303,7 +305,7 @@ namespace mine
     return r;
   }
 
-  text_buffer text_buffer::
+  content content::
   merge_lines (line_number f, line_number s) const
   {
     MINE_PRECONDITION (f.value + 1 == s.value);
@@ -314,24 +316,24 @@ namespace mine
     const auto& sl (lines_[s.value]);
 
     auto t (fl.data + sl.data);
-    line nl (std::move (t));
+    line nl (move (t));
 
-    auto r (lines_.set (f.value, std::move (nl)));
+    auto r (lines_.set (f.value, move (nl)));
     r = r.erase (s.value);
 
-    return text_buffer (std::move (r));
+    return content (move (r));
   }
 
-  text_buffer
-  make_empty_buffer ()
+  content
+  make_empty_content ()
   {
-    return text_buffer ();
+    return content ();
   }
 
-  text_buffer
-  make_buffer_from_string (string_view s)
+  content
+  make_content_from_string (string_view s)
   {
-    text_buffer::lines_type ls;
+    content::lines_type ls;
 
     size_t b (0);
     size_t e (s.find ('\n'));
@@ -339,28 +341,28 @@ namespace mine
     while (e != string_view::npos)
     {
       auto sub (s.substr (b, e - b));
-      text_buffer::line l (sub);
-      ls = ls.push_back (std::move (l));
+      content::line l (sub);
+      ls = ls.push_back (move (l));
 
       b = e + 1;
       e = s.find ('\n', b);
     }
 
     auto sub (s.substr (b));
-    text_buffer::line l (sub);
-    ls = ls.push_back (std::move (l));
+    content::line l (sub);
+    ls = ls.push_back (move (l));
 
-    return text_buffer (std::move (ls));
+    return content (move (ls));
   }
 
   string
-  buffer_to_string (const text_buffer& b)
+  content_to_string (const content& b)
   {
     string r;
     bool first (true);
 
     immer::for_each (b.lines (),
-                     [&] (const text_buffer::line& l)
+                     [&] (const content::line& l)
     {
       if (!first)
         r.push_back ('\n');

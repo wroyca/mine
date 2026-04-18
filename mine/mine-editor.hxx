@@ -9,7 +9,7 @@
 
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-command.hxx>
-#include <mine/mine-core-state.hxx>
+#include <mine/mine-workspace.hxx>
 #include <mine/mine-io-file.hxx>
 #include <mine/mine-terminal-input.hxx>
 #include <mine/mine-utility.hxx>
@@ -32,25 +32,25 @@ namespace mine
     view       // Expensive: scroll, mostly blit but requires full re-render.
   };
 
-  using state_change_type = change_hint;
+  using change_hint_type = change_hint;
 
   // The Nexus.
   //
-  class core
+  class editor
   {
   public:
-    using change_callback = std::function<void (const state&, change_hint)>;
+    using change_callback = std::function<void (const workspace&, change_hint)>;
     using msg_callback = std::function<void (const std::string&)>;
 
     // We really need the loop to do anything useful (loading/saving).
     //
     explicit
-    core (async_loop& l, state s = state ());
+    editor (async_loop& l, workspace s = workspace ());
 
     // State Access
     //
 
-    const state&
+    const workspace&
     current () const noexcept
     {
       return h_.current ();
@@ -114,28 +114,28 @@ namespace mine
     bool
     dirty () const noexcept
     {
-      auto it (files_.find (h_.current ().active_buffer_id ()));
+      auto it (files_.find (h_.current ().active_document_id ()));
       return it != files_.end () && it->second.is_dirty ();
     }
 
     bool
     io_busy () const noexcept
     {
-      auto it (files_.find (h_.current ().active_buffer_id ()));
+      auto it (files_.find (h_.current ().active_document_id ()));
       return it != files_.end () && it->second.io_in_progress ();
     }
 
     std::optional<std::string>
     filename () const noexcept
     {
-      auto it (files_.find (h_.current ().active_buffer_id ()));
+      auto it (files_.find (h_.current ().active_document_id ()));
       return it != files_.end () ? it->second.file_name () : std::nullopt;
     }
 
     std::optional<float>
     progress () const noexcept
     {
-      auto it (files_.find (h_.current ().active_buffer_id ()));
+      auto it (files_.find (h_.current ().active_document_id ()));
       return it != files_.end () ? it->second.progress_percent () : std::nullopt;
     }
 
@@ -178,14 +178,14 @@ namespace mine
     notify (change_hint h);
 
     void
-    run_io (io_effect eff, buffer_id id);
+    run_io (io_effect eff, document_id id);
 
     void
-    complete_io (buffer_id id, const file_io_action& a);
+    complete_io (document_id id, const file_io_action& a);
 
   private:
-    history h_;
-    std::map<buffer_id, file_buffer> files_;
+    edit_history h_;
+    std::map<document_id, file_document> files_;
 
     async_loop* l_;
     vm vm_ {vm_limits::permissive()};
@@ -196,5 +196,5 @@ namespace mine
     msg_callback cb_msg_;
   };
 
-  using editor_core = core;
+
 }

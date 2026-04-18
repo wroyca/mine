@@ -1,7 +1,8 @@
 #include <mine/mine-treesitter.hxx>
-#include <mine/mine-contract.hxx>
 
 #include <utility>
+
+#include <mine/mine-contract.hxx>
 
 using namespace std;
 
@@ -146,7 +147,7 @@ namespace mine
                        TSPoint pos,
                        uint32_t* read)
     {
-      auto* b (static_cast<const text_buffer*> (p));
+      auto* b (static_cast<const content*> (p));
 
       // Tree-sitter might ask for data past the end of the file when it is
       // finishing up the parse. We just return an empty string to signal EOF.
@@ -189,7 +190,7 @@ namespace mine
   }
 
   syntax_tree syntax_parser::
-  parse_buffer (const text_buffer& b, const syntax_tree* old)
+  parse_buffer (const content& b, const syntax_tree* old)
   {
     MINE_PRECONDITION (parser_ != nullptr);
 
@@ -199,7 +200,7 @@ namespace mine
     // but our read_buffer_chunk callback safely casts it back to const.
     //
     TSInput in;
-    in.payload = const_cast<text_buffer*> (&b);
+    in.payload = const_cast<content*> (&b);
     in.read = read_buffer_chunk;
     in.encoding = TSInputEncodingUTF8;
 

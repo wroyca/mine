@@ -5,9 +5,6 @@
 
 #include <boost/asio.hpp>
 
-#include <mine/mine-contract.hxx>
-#include <mine/mine-predefs.hxx>
-
 namespace mine
 {
   // The event loop wrapper.
@@ -35,17 +32,11 @@ namespace mine
     explicit
     async_loop (const int hint = 1);
 
-    async_loop (const async_loop&)
-      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be copied");
+    async_loop (const async_loop&) = delete;
+    async_loop (async_loop&&) = delete;
 
-    async_loop (async_loop&&)
-      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be moved");
-
-    async_loop& operator = (const async_loop&)
-      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be copied");
-
-    async_loop& operator = (async_loop&&)
-      = MINE_CPP_DELETED_FUNCTION("async_loop owns an io_context and cannot be moved");
+    async_loop& operator = (const async_loop&) = delete;
+    async_loop& operator = (async_loop&&) = delete;
 
     ~async_loop () = default;
 

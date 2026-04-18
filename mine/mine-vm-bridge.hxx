@@ -10,7 +10,7 @@
 
 namespace mine
 {
-  class core;
+  class editor;
 
   // Register native C++ editor APIs into the provided VM.
   //
@@ -104,16 +104,16 @@ namespace mine
   template <auto Impl>
   struct function_cast;
 
-  template <typename... A, void (core::*Impl) (A...)>
+  template <typename... A, void (editor::*Impl) (A...)>
   struct function_cast<Impl>
   {
     static int
     thunk (lua_State* l)
     {
-      // Recover the editor core instance.
+      // Recover the editor editor instance.
       //
       lua_getglobal (l, "__mine_core");
-      auto* c (static_cast<core*> (lua_touserdata (l, -1)));
+      auto* c (static_cast<editor*> (lua_touserdata (l, -1)));
       lua_pop (l, 1);
 
       if (c == nullptr)
@@ -125,7 +125,7 @@ namespace mine
   private:
     template <std::size_t... I>
     static int
-    dispatch (lua_State* l, core* c, std::index_sequence<I...>)
+    dispatch (lua_State* l, editor* c, std::index_sequence<I...>)
     {
       // Note that Lua stacks are 1-indexed, so we offset our index sequence
       // by 1 when fetching arguments. We rely on the comma operator and

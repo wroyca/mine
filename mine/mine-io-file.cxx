@@ -11,6 +11,7 @@
 
 #include <mine/mine-contract.hxx>
 
+
 using namespace std;
 
 namespace mine
@@ -18,7 +19,7 @@ namespace mine
   // Query
   //
 
-  bool file_buffer::
+  bool file_document::
   is_dirty () const noexcept
   {
     // A buffer is "dirty" if the text currently in memory (what the user sees)
@@ -30,38 +31,38 @@ namespace mine
       using type = decay_t<decltype (s)>;
 
       if constexpr (is_same_v<type, no_file>)
-        return content != s.content;
+        return text != s.text;
       else if constexpr (is_same_v<type, existing_file>)
-        return content != s.content;
+        return text != s.text;
       else if constexpr (is_same_v<type, loading_file>)
-        return content != s.content;
+        return text != s.text;
       else if constexpr (is_same_v<type, saving_file>)
-        return content != s.content;
+        return text != s.text;
       else
         return false;
     }, state);
   }
 
-  bool file_buffer::
+  bool file_document::
   io_in_progress () const noexcept
   {
     return !holds_alternative<existing_file> (state) &&
            !holds_alternative<no_file> (state);
   }
 
-  bool file_buffer::
+  bool file_document::
   load_in_progress () const noexcept
   {
     return holds_alternative<loading_file> (state);
   }
 
-  bool file_buffer::
+  bool file_document::
   save_in_progress () const noexcept
   {
     return holds_alternative<saving_file> (state);
   }
 
-  optional<string> file_buffer::
+  optional<string> file_document::
   file_name () const noexcept
   {
     return visit ([] (const auto& s) -> optional<string>
@@ -70,13 +71,13 @@ namespace mine
     }, state);
   }
 
-  optional<float> file_buffer::
+  optional<float> file_document::
   progress_percent () const noexcept
   {
     if (auto* l = get_if<loading_file> (&state))
       return l->progress_percent ();
     else if (auto* s = get_if<saving_file> (&state))
-      return s->progress_percent (content.line_count ());
+      return s->progress_percent (text.line_count ());
     else
       return nullopt;
   }
@@ -131,7 +132,7 @@ namespace mine
         // within this thread and amortized O(1) push_back, making the load
         // significantly faster.
         //
-        auto ls (text_buffer::lines_type {text_buffer::line {}}.transient ());
+        auto ls (content::lines_type {content::line {}}.transient ());
 
         ifstream f;
         f.exceptions (fstream::badbit | fstream::failbit);
@@ -147,7 +148,7 @@ namespace mine
 
           loading_file prog {
             name,
-            text_buffer (ls.persistent ()),
+            content (ls.persistent ()),
             0,
             total
           };
@@ -161,7 +162,7 @@ namespace mine
 
             // Construct the line object.
             //
-            text_buffer::line l (string_view (s.data (), s.size ()));
+            content::line l (string_view (s.data (), s.size ()));
 
             if (first)
               ls.set (0, move (l)), first = false;
@@ -176,7 +177,7 @@ namespace mine
             {
               // Snapshot the transient to update the UI.
               //
-              prog.content = text_buffer (ls.persistent ());
+              prog.text = content (ls.persistent ());
               prog.loaded_bytes = read;
 
               d (load_progress_action {prog});
@@ -187,7 +188,7 @@ namespace mine
           // Freeze the transient into a persistent structure and ship it.
           //
           d (load_done_action {
-            existing_file {name, text_buffer (ls.persistent ())}
+            existing_file {name, content (ls.persistent ())}
           });
         }
         catch (...)
@@ -195,7 +196,7 @@ namespace mine
           // On error, we return whatever partial content we managed to read.
           //
           d (load_error_action {
-            existing_file {name, text_buffer {ls.persistent ()}},
+            existing_file {name, content {ls.persistent ()}},
             current_exception ()
           });
         }
@@ -207,8 +208,8 @@ namespace mine
   //
   static file_io_effect
   save_effect (immer::box<string> name,
-               text_buffer old_content,
-               text_buffer new_content)
+               content old_content,
+               content new_content)
   {
     return [name, old_content, new_content] (
             function<void (file_io_action)> dispatch)
@@ -271,7 +272,7 @@ namespace mine
                     old_content.lines ().drop (prog.saved_lines));
 
           d (save_error_action {
-            existing_file {name, text_buffer {rec}},
+            existing_file {name, content {rec}},
             current_exception ()
           });
         }
@@ -282,8 +283,8 @@ namespace mine
   // External API
   //
 
-  pair<file_buffer, file_io_effect>
-  load_file (file_buffer b, const string& name)
+  pair<file_document, file_io_effect>
+  load_file (file_document b, const string& name)
   {
     // Initialize loading state.
     //
@@ -292,26 +293,26 @@ namespace mine
     //
     loading_file l {
       immer::box<string> {name},
-      text_buffer {},
+      content {},
       0,
       1
     };
 
     b.state = l;
-    b.content = text_buffer {};
+    b.text = content {};
 
     return {b, load_effect (immer::box<string> {name})};
   }
 
-  pair<file_buffer, file_io_effect>
-  save_file (file_buffer b)
+  pair<file_document, file_io_effect>
+  save_file (file_document b)
   {
     auto* ex (get_if<existing_file> (&b.state));
     MINE_PRECONDITION (ex != nullptr);
 
     auto name (ex->name);
-    auto old_c (ex->content);
-    auto new_c (b.content);
+    auto old_c (ex->text);
+    auto new_c (b.text);
 
     // Transition to saving state.
     //
@@ -321,8 +322,8 @@ namespace mine
     return {b, save_effect (name, old_c, new_c)};
   }
 
-  pair<file_buffer, optional<string>>
-  update_file_buffer (file_buffer b, file_io_action a)
+  pair<file_document, optional<string>>
+  update_file_document (file_document b, file_io_action a)
   {
     // The Reducer.
     //
@@ -330,25 +331,25 @@ namespace mine
     // We simply return the new buffer state and an optional status message
     // for the UI.
     //
-    return visit ([&] (auto&& x) -> pair<file_buffer, optional<string>>
+    return visit ([&] (auto&& x) -> pair<file_document, optional<string>>
     {
       using type = decay_t<decltype (x)>;
 
       if constexpr (is_same_v<type, load_progress_action>)
       {
-        b.content = x.file.content;
+        b.text = x.file.text;
         b.state = x.file;
         return {b, nullopt};
       }
       else if constexpr (is_same_v<type, load_done_action>)
       {
-        b.content = x.file.content;
+        b.text = x.file.text;
         b.state = x.file;
         return {b, "Loaded: " + x.file.name.get ()};
       }
       else if constexpr (is_same_v<type, load_error_action>)
       {
-        b.content = x.file.content;
+        b.text = x.file.text;
         b.state = x.file;
         return {b, "Error loading: " + x.file.name.get ()};
       }

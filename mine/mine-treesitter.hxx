@@ -7,7 +7,7 @@
 
 #include <tree_sitter/api.h>
 
-#include <mine/mine-core-buffer.hxx>
+#include <mine/mine-content.hxx>
 #include <mine/mine-types.hxx>
 
 namespace mine
@@ -120,7 +120,7 @@ namespace mine
     // contiguous string.
     //
     syntax_tree
-    parse_buffer (const text_buffer& b, const syntax_tree* old = nullptr);
+    parse_buffer (const content& b, const syntax_tree* old = nullptr);
 
   private:
     TSParser* parser_ {nullptr};

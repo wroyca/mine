@@ -1,9 +1,10 @@
 #include <mine/mine-window-opengl-typography-raster.hxx>
-#include <mine/mine-contract.hxx>
 
 #include <string>
 #include <cstring>
 #include <iostream>
+
+#include <mine/mine-contract.hxx>
 
 using namespace std;
 
@@ -54,7 +55,7 @@ namespace mine
     if (this != &x)
     {
       this->~ft_rasterizer ();
-      new (this) ft_rasterizer (std::move (x));
+      new (this) ft_rasterizer (move (x));
     }
     return *this;
   }

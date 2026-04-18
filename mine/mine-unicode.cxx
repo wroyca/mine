@@ -13,8 +13,8 @@
 #include <unicode/ustring.h>
 #include <unicode/utext.h>
 
-#include <mine/mine-core-buffer.hxx>
-#include <mine/mine-core-cursor.hxx>
+#include <mine/mine-content.hxx>
+#include <mine/mine-cursor.hxx>
 
 using namespace std;
 
@@ -165,7 +165,7 @@ namespace mine
   //
 
   void
-  assert_cursor_aligned (const cursor& c, const text_buffer& b)
+  assert_cursor_aligned (const cursor& c, const content& b)
   {
 #ifndef NDEBUG
     // Check line existence first.
@@ -196,7 +196,7 @@ namespace mine
   }
 
   void
-  assert_cursor_valid (const cursor_position& p, const text_buffer& b)
+  assert_cursor_valid (const cursor_position& p, const content& b)
   {
 #ifndef NDEBUG
     // Basic bounds checking.

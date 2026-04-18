@@ -1,4 +1,4 @@
-#include <mine/mine-editor-core.hxx>
+#include <mine/mine-editor.hxx>
 
 #include <fstream>
 #include <sstream>
@@ -8,12 +8,12 @@ using namespace std;
 
 namespace mine
 {
-  core::
-  core (async_loop& l, state s)
-    : h_ (std::move (s)),
+  editor::
+  editor (async_loop& l, workspace s)
+    : h_ (move (s)),
       l_ (&l)
   {
-    files_[buffer_id {1}] = file_buffer ();
+    files_[document_id {1}] = file_document ();
 
     print_handler_ = [this] (string_view msg)
     {
@@ -21,7 +21,7 @@ namespace mine
     };
   }
 
-  void core::
+  void editor::
   bind_key (string_view chord, string_view action)
   {
     auto evt (parse_key_chord (chord));
@@ -35,7 +35,7 @@ namespace mine
     }
   }
 
-  void core::
+  void editor::
   dispatch (const command& cmd)
   {
     // Meta-commands that bypass standard state execution.
@@ -76,7 +76,7 @@ namespace mine
 
     if (cmd.name () == "close_window")
     {
-      vector<window_layout> lays;
+      vector<window_partition> lays;
       pre.get_layout (lays, 100, 100);
 
       if (lays.size () <= 1)
@@ -101,7 +101,7 @@ namespace mine
       c.cursor_pos = 0;
 
       post = post.with_cmdline (c);
-      h_ = h_.replace_current (std::move (post));
+      h_ = h_.replace_current (move (post));
 
       auto pc (parse_cmdline (a));
 
@@ -134,12 +134,12 @@ namespace mine
     if (cmd.modifies_buffer (pre))
     {
       hint = change_hint::content;
-      h_ = h_.push (std::move (post));
+      h_ = h_.push (move (post));
     }
     else if (pre.view () != post.view () || cmd.name () == "split_window")
     {
       hint = change_hint::view;
-      h_ = h_.push (std::move (post));
+      h_ = h_.push (move (post));
     }
     else if (pre.get_cursor () != post.get_cursor () ||
              pre.cmdline () != post.cmdline () ||
@@ -152,7 +152,7 @@ namespace mine
       else
         hint = change_hint::cursor;
 
-      h_ = h_.replace_current (std::move (post));
+      h_ = h_.replace_current (move (post));
     }
     else
     {
@@ -162,7 +162,7 @@ namespace mine
     notify (hint);
   }
 
-  void core::
+  void editor::
   handle_input (const input_event& e)
   {
     if (auto it = keymaps_.find (e); it != keymaps_.end ())
@@ -181,7 +181,7 @@ namespace mine
       dispatch (*c);
   }
 
-  void core::
+  void editor::
   undo ()
   {
     if (can_undo ())
@@ -195,7 +195,7 @@ namespace mine
     }
   }
 
-  void core::
+  void editor::
   redo ()
   {
     if (can_redo ())
@@ -209,39 +209,39 @@ namespace mine
     }
   }
 
-  void core::
+  void editor::
   quit ()
   {
     exit (0);
   }
 
-  void core::
+  void editor::
   load (const string& path)
   {
     if (!l_)
       return;
 
-    buffer_id new_id (h_.current ().next_buffer_id ());
-    auto s (h_.current ().with_new_buffer (make_empty_buffer (), path));
+    document_id new_id (h_.current ().next_document_id ());
+    auto s (h_.current ().with_new_document (make_empty_content (), path));
 
-    s = s.switch_buffer (new_id);
+    s = s.switch_document (new_id);
 
-    file_buffer fb;
-    auto[nfb, eff] (mine::load_file (std::move (fb), path));
-    files_[new_id] = std::move (nfb);
+    file_document fb;
+    auto[nfb, eff] (mine::load_file (move (fb), path));
+    files_[new_id] = move (nfb);
 
-    h_ = h_.push (std::move (s));
-    run_io (std::move (eff), new_id);
+    h_ = h_.push (move (s));
+    run_io (move (eff), new_id);
     notify (change_hint::content);
   }
 
-  void core::
+  void editor::
   save ()
   {
     if (!l_)
       return;
 
-    buffer_id active_id (h_.current ().active_buffer_id ());
+    document_id active_id (h_.current ().active_document_id ());
     auto& fb (files_[active_id]);
 
     if (!holds_alternative<existing_file> (fb.state))
@@ -250,27 +250,27 @@ namespace mine
       return;
     }
 
-    fb.content = h_.current ().buffer ();
+    fb.text = h_.current ().active_content ();
 
-    auto[nfb, eff] (mine::save_file (std::move (fb)));
-    files_[active_id] = std::move (nfb);
+    auto[nfb, eff] (mine::save_file (move (fb)));
+    files_[active_id] = move (nfb);
 
-    run_io (std::move (eff), active_id);
+    run_io (move (eff), active_id);
     notify (change_hint::content);
   }
 
-  void core::
+  void editor::
   show_message (const string& m)
   {
     auto s (h_.current ().with_cmdline_message (m));
-    h_ = h_.replace_current (std::move (s));
+    h_ = h_.replace_current (move (s));
     notify (change_hint::selection);
 
     if (cb_msg_)
       cb_msg_ (m);
   }
 
-  void core::
+  void editor::
   load_config ()
   {
     vm_.initialize ();
@@ -321,45 +321,45 @@ namespace mine
     }
   }
 
-  void core::
+  void editor::
   resize (screen_size s)
   {
     auto ns (h_.current ().resize_layout (s));
-    h_ = h_.replace_current (std::move (ns));
+    h_ = h_.replace_current (move (ns));
     notify (change_hint::view);
   }
 
-  void core::
+  void editor::
   notify (change_hint h)
   {
     if (cb_change_)
       cb_change_ (h_.current (), h);
   }
 
-  void core::
-  run_io (io_effect eff, buffer_id id)
+  void editor::
+  run_io (io_effect eff, document_id id)
   {
-    l_->post ([this, e = std::move (eff), id] () mutable
+    l_->post ([this, e = move (eff), id] () mutable
     {
       e ([this, id] (file_io_action a)
       {
-        this->complete_io (id, std::move (a));
+        this->complete_io (id, move (a));
       });
     });
   }
 
-  void core::
-  complete_io (buffer_id id, const file_io_action& a)
+  void editor::
+  complete_io (document_id id, const file_io_action& a)
   {
     auto& fb (files_[id]);
-    auto [nfb, msg] (update_file_buffer (std::move (fb), a));
-    fb = std::move (nfb);
+    auto [nfb, msg] (update_file_document (move (fb), a));
+    fb = move (nfb);
 
-    if (fb.content != h_.current ().get_buffer (id).content)
+    if (fb.text != h_.current ().get_document (id).text)
     {
-      auto s (h_.current ().update_buffer (id, fb.content));
+      auto s (h_.current ().update_document (id, fb.text));
 
-      h_ = h_.push (std::move (s));
+      h_ = h_.push (move (s));
       notify (change_hint::content);
     }
 

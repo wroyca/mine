@@ -8,7 +8,7 @@
 #include <optional>
 
 #include <mine/mine-clipboard.hxx>
-#include <mine/mine-core-state.hxx>
+#include <mine/mine-workspace.hxx>
 #include <mine/mine-terminal-input.hxx>
 #include <mine/mine-unicode.hxx>
 
@@ -37,8 +37,8 @@ namespace mine
     // Note that we pass the state by const reference. The implementation must
     // return a modified copy.
     //
-    [[nodiscard]] virtual editor_state
-    execute (const editor_state& s) const = 0;
+    [[nodiscard]] virtual workspace
+    execute (const workspace& s) const = 0;
 
     // Diagnostic name (e.g., "insert-char", "move-down").
     //
@@ -50,7 +50,7 @@ namespace mine
     // new undo frame.
     //
     [[nodiscard]] virtual bool
-    modifies_buffer (const editor_state& s) const noexcept = 0;
+    modifies_buffer (const workspace& s) const noexcept = 0;
   };
 
   // Parse a key chord string (like "C-o" or "S-up") into an input event.
@@ -78,27 +78,27 @@ namespace mine
   class copy_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   class paste_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   // Handle the Backspace key.
@@ -110,14 +110,14 @@ namespace mine
   class delete_backward_command: public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   // Handle the Delete key.
@@ -130,14 +130,14 @@ namespace mine
   class delete_forward_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   // Insert a span of text at the current cursor position.
@@ -153,14 +153,14 @@ namespace mine
     explicit
     insert_text_command (std::string text);
 
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
 
   private:
     std::string text_;
@@ -174,14 +174,14 @@ namespace mine
   class insert_newline_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   // The vocabulary of abstract movement directions.
@@ -229,14 +229,14 @@ namespace mine
     explicit
     move_cursor_command (move_direction d, bool select = false);
 
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
 
   private:
     move_direction d_;
@@ -248,53 +248,53 @@ namespace mine
   class save_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   class save_and_quit_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   class quit_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   class redo_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
 #pragma pack(push, 1)
@@ -308,14 +308,14 @@ namespace mine
     explicit
     begin_selection_command (std::uint16_t x, std::uint16_t y);
 
-    [[nodiscard]] editor_state
-    execute (const editor_state &s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace &s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
 
   private:
     std::uint16_t x_;
@@ -331,14 +331,14 @@ namespace mine
     explicit
     update_selection_command (std::uint16_t x, std::uint16_t y);
 
-    [[nodiscard]] editor_state
-    execute (const editor_state &s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace &s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
 
   private:
     std::uint16_t x_;
@@ -355,14 +355,14 @@ namespace mine
     explicit
     end_selection_command (std::uint16_t x, std::uint16_t y);
 
-    [[nodiscard]] editor_state
-    execute (const editor_state &s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace &s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
 
   private:
     std::uint16_t x_;
@@ -374,59 +374,59 @@ namespace mine
   class undo_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   class toggle_cmdline_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   class escape_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 
   class split_window_command : public command
   {
   public:
     explicit
-    split_window_command (split_dir d);
+    split_window_command (layout_direction d);
 
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
 
   private:
-    split_dir d_;
+    layout_direction d_;
   };
 
   class switch_window_command : public command
@@ -435,14 +435,14 @@ namespace mine
     explicit
     switch_window_command (int dx, int dy);
 
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
 
   private:
     int dx_;
@@ -452,13 +452,13 @@ namespace mine
   class close_window_command : public command
   {
   public:
-    [[nodiscard]] editor_state
-    execute (const editor_state& s) const override;
+    [[nodiscard]] workspace
+    execute (const workspace& s) const override;
 
     [[nodiscard]] std::string_view
     name () const noexcept override;
 
     [[nodiscard]] bool
-    modifies_buffer (const editor_state& s) const noexcept override;
+    modifies_buffer (const workspace& s) const noexcept override;
   };
 }

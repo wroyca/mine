@@ -1,10 +1,11 @@
 #include <mine/mine-window-input.hxx>
-#include <mine/mine-contract.hxx>
 
 #include <GLFW/glfw3.h>
 
 #include <string>
 #include <utility>
+
+#include <mine/mine-contract.hxx>
 
 using namespace std;
 
@@ -49,9 +50,9 @@ namespace mine
   window_input::
   window_input (GLFWwindow* w, event_cb ecb, scroll_cb scb, mouse_cb mcb)
     : w_ (w),
-      ecb_ (std::move (ecb)),
-      scb_ (std::move (scb)),
-      mcb_ (std::move (mcb))
+      ecb_ (move (ecb)),
+      scb_ (move (scb)),
+      mcb_ (move (mcb))
   {
     MINE_PRECONDITION (w_ != nullptr);
     MINE_PRECONDITION (ecb_ != nullptr);
@@ -101,7 +102,7 @@ namespace mine
       char c (static_cast<char> ('a' + (k - GLFW_KEY_A)));
       string s (1, c);
 
-      self->ecb_ (text_input_event {std::move (s), mod});
+      self->ecb_ (text_input_event {move (s), mod});
       return;
     }
 
@@ -136,7 +137,7 @@ namespace mine
     MINE_INVARIANT (self != nullptr);
 
     string s (encode_utf8 (cp));
-    self->ecb_ (text_input_event {std::move (s), key_modifier::none});
+    self->ecb_ (text_input_event {move (s), key_modifier::none});
   }
 
   void window_input::

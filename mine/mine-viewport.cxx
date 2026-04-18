@@ -1,11 +1,13 @@
-#include <mine/mine-core-view.hxx>
+#include <mine/mine-viewport.hxx>
 #include <mine/mine-terminal.hxx>
 #include <mine/mine-unicode.hxx>
 
+using namespace std;
+
 namespace mine
 {
-  cursor_position view::
-  screen_to_buffer (screen_position p, const text_buffer& b) const noexcept
+  cursor_position viewport::
+  screen_to_buffer (screen_position p, const content& b) const noexcept
   {
     // Translate the physical screen row to a logical document line by
     // accounting for our internal scroll offset.
@@ -40,7 +42,7 @@ namespace mine
     auto r (make_grapheme_range (s));
 
     uint16_t sc (0);
-    std::size_t gc (0);
+    size_t gc (0);
 
     // Walk through the graphemes and accumulate their visual width. The idea
     // is to stop as soon as adding the next grapheme would push us past the
@@ -69,5 +71,60 @@ namespace mine
     }
 
     return cursor_position (l, column_number (gc));
+  }
+
+  viewport viewport::
+  scroll_to_cursor (const cursor& c, const content& b) const noexcept
+  {
+    line_number l (c.line ());
+    line_number nt (top_); // new top
+    size_t h (height ());
+
+    if (l.value < top_.value)
+    {
+      nt = l;
+    }
+    else if (l.value >= top_.value + h)
+    {
+      nt = line_number (l.value - h + 1);
+    }
+
+    size_t max_top (0);
+
+    if (b.line_count () > h)
+      max_top = b.line_count () - h;
+
+    nt = line_number (min (nt.value, max_top));
+
+    return viewport (nt, sz_);
+  }
+
+  viewport viewport::
+  scroll_up (size_t n, const content& /*b*/) const noexcept
+  {
+    if (top_.value == 0)
+      return *this;
+
+    size_t t (top_.value > n ? top_.value - n : 0);
+    return viewport (line_number (t), sz_);
+  }
+
+  viewport viewport::
+  scroll_down (size_t n, const content& b) const noexcept
+  {
+    size_t h (height ());
+    size_t max_top (0);
+
+    if (b.line_count () > h)
+      max_top = b.line_count () - h;
+
+    size_t t (min (top_.value + n, max_top));
+    return viewport (line_number (t), sz_);
+  }
+
+  viewport viewport::
+  resize (screen_size s) const noexcept
+  {
+    return viewport (top_, s);
   }
 }

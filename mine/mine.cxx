@@ -13,11 +13,10 @@
 
 // #include <cpptrace/cpptrace.hpp>
 
-#include <mine/mine-editor-core.hxx>
+#include <mine/mine-editor.hxx>
 #include <mine/mine-terminal.hxx>
 #include <mine/mine-async-loop.hxx>
 #include <mine/mine-async-input.hxx>
-#include <mine/mine-contract.hxx>
 #include <mine/mine-window.hxx>
 
 // OpenGL GUI dependencies.
@@ -126,7 +125,7 @@ namespace mine
 
     explicit
     terminal_editor_app (string f)
-      : file_ (std::move(f))
+      : file_ (move(f))
     {
       g_raw = &raw_;
       init ();
@@ -226,9 +225,9 @@ namespace mine
       // Wire up Logic -> UI.
       //
       core_.on_change (
-        [this] (const editor_state& st, state_change_type t)
+        [this] (const workspace& st, change_hint_type t)
         {
-          if (t == state_change_type::cursor)
+          if (t == change_hint_type::cursor)
             ren_->render_cursor_only (st);
           else
             ren_->render (st);
@@ -304,7 +303,7 @@ namespace mine
       if (!winch_timer_)
         return;
 
-      winch_timer_->expires_after (std::chrono::milliseconds (250));
+      winch_timer_->expires_after (chrono::milliseconds (250));
       winch_timer_->async_wait ([this] (const boost::system::error_code& e)
       {
         if (!e)
@@ -347,7 +346,7 @@ namespace mine
     // Infrastructure.
     //
     async_loop  loop_;
-    editor_core core_ {loop_};
+    editor core_ {loop_};
 
     // Keep this declared before UI components so it restores the terminal
     // state as the very last step during destruction.
@@ -361,7 +360,7 @@ namespace mine
     unique_ptr<boost::asio::signal_set> winch_;
 #else
     unique_ptr<boost::asio::steady_timer> winch_timer_;
-    std::optional<screen_size> last_term_sz_;
+    optional<screen_size> last_term_sz_;
 #endif
 
     string file_;
@@ -386,7 +385,7 @@ namespace mine
       : win_ (1024, 768, "mine"),
         gl_ (),
         ren_ (),
-        file_ (std::move (f))
+        file_ (move (f))
     {
       init ();
     }
@@ -394,7 +393,7 @@ namespace mine
     void
     run ()
     {
-      auto last (std::chrono::steady_clock::now ());
+      auto last (chrono::steady_clock::now ());
 
       // The GUI Event Loop.
       //
@@ -406,8 +405,8 @@ namespace mine
       {
         win_.update ();
 
-        auto now (std::chrono::steady_clock::now ());
-        float dt (std::chrono::duration<float> (now - last).count ());
+        auto now (chrono::steady_clock::now ());
+        float dt (chrono::duration<float> (now - last).count ());
         last = now;
 
         if (dt > 0.1f)
@@ -460,7 +459,7 @@ namespace mine
         {
           // Rest the CPU a bit if we aren't actively painting anything.
           //
-          std::this_thread::sleep_for (std::chrono::milliseconds (8));
+          this_thread::sleep_for (chrono::milliseconds (8));
         }
       }
     }
@@ -491,7 +490,7 @@ namespace mine
       // Wire up Logic -> UI.
       //
       core_.on_change (
-        [this] (const editor_state& /*st*/, state_change_type /*t*/)
+        [this] (const workspace& /*st*/, change_hint_type /*t*/)
       {
         // Flag for redraw on the next frame.
         //
@@ -554,7 +553,7 @@ namespace mine
     }
 
     async_loop  loop_;
-    editor_core core_ {loop_};
+    editor core_ {loop_};
 
     window          win_;
     opengl_context  gl_;
@@ -578,14 +577,14 @@ main (int argc, char* argv[])
   try
   {
     bool gui (false);
-    std::string f;
+    string f;
 
     // A very simple argument parser. We look for a --gui switch, and assume
     // the first non-switch argument is the filename.
     //
     for (int i (1); i < argc; ++i)
     {
-      std::string a (argv[i]);
+      string a (argv[i]);
       if (a == "--gui")
         gui = true;
       else if (f.empty ())
@@ -621,9 +620,9 @@ main (int argc, char* argv[])
 
     return 0;
   }
-  catch (const std::exception& e)
+  catch (const exception& e)
   {
-    std::cerr << "Abandon all hope, ye who enter here: " << e.what () << std::endl;
+    cerr << "Abandon all hope, ye who enter here: " << e.what () << endl;
     return 1;
   }
 }

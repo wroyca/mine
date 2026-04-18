@@ -8,13 +8,13 @@
 #include <immer/map.hpp>
 #include <immer/box.hpp>
 
-#include <mine/mine-core-view.hxx>
-#include <mine/mine-core-cursor.hxx>
-#include <mine/mine-core-buffer.hxx>
+#include <mine/mine-viewport.hxx>
+#include <mine/mine-cursor.hxx>
+#include <mine/mine-content.hxx>
 
 namespace mine
 {
-  constexpr buffer_id invalid_buffer {0};
+  constexpr document_id invalid_document {0};
   constexpr window_id invalid_window {0};
 
   // Command line state.
@@ -22,7 +22,7 @@ namespace mine
   // We manage the prompt below the status bar for Vim-like commands (:w, :q,
   // etc) directly in the state.
   //
-  struct cmdline_state
+  struct command_line
   {
     bool        active {false};
     std::string content;
@@ -35,23 +35,23 @@ namespace mine
     bool is_submitted {false};
 
     bool
-    operator== (const cmdline_state&) const = default;
+    operator== (const command_line&) const = default;
   };
 
-  // Buffer state.
+  // The persistent representation of an open document.
   //
-  // A buffer represents the actual text content being edited. Notice that we
-  // might have multiple windows looking at the exact same buffer, so the text
-  // and the modified flag must naturally live here rather than in the window.
+  // A document is a named, immutable text with a modification flag. Multiple
+  // windows can share the same document, so the text and the modified flag
+  // live here rather than in the window.
   //
-  struct buffer_state
+  struct document
   {
-    text_buffer content;
-    bool        modified {false};
-    std::string name;
+    mine::content text;
+    bool          modified {false};
+    std::string   name;
 
     bool
-    operator== (const buffer_state&) const = default;
+    operator== (const document&) const = default;
   };
 
   // Window state.
@@ -60,14 +60,14 @@ namespace mine
   // own cursor and scroll position, independent of other windows sharing the
   // same buffer.
   //
-  struct window_state
+  struct editor_window
   {
-    buffer_id    buf {invalid_buffer};
-    mine::cursor cur;
-    mine::view   vw;
+    document_id      doc {invalid_document};
+    mine::cursor     cursor;
+    mine::viewport   viewport;
 
     bool
-    operator== (const window_state&) const = default;
+    operator== (const editor_window&) const = default;
   };
 
   // Split direction.
@@ -75,13 +75,13 @@ namespace mine
   // We use the common visual semantics here. Horizontal means slicing the
   // screen top to bottom, vertical means side by side.
   //
-  enum class split_dir : std::uint8_t
+  enum class layout_direction : std::uint8_t
   {
     horizontal,
     vertical
   };
 
-  struct split_node;
+  struct layout_node;
 
   // Nullable wrapper around immer::box.
   //
@@ -91,17 +91,17 @@ namespace mine
   // types. We wrap it in an optional to give us a safe base case and
   // pointer-like ergonomics.
   //
-  class split_ptr
+  class layout_tree
   {
   public:
-    split_ptr () = default;
-    split_ptr (std::nullptr_t) {}
+    layout_tree () = default;
+    layout_tree (std::nullptr_t) {}
 
     explicit
-    split_ptr (const split_node& n);
+    layout_tree (const layout_node& n);
 
     bool
-    operator == (const split_ptr& o) const;
+    operator == (const layout_tree& o) const;
 
     explicit
     operator bool () const
@@ -109,20 +109,20 @@ namespace mine
       return box_.has_value ();
     }
 
-    const split_node*
+    const layout_node*
     operator ->() const
     {
       return box_.value ().operator ->();
     }
 
-    const split_node&
+    const layout_node&
     operator * () const
     {
       return box_.value ().operator * ();
     }
 
   private:
-    std::optional<immer::box<split_node>> box_;
+    std::optional<immer::box<layout_node>> box_;
   };
 
   // Layout tree node.
@@ -131,17 +131,17 @@ namespace mine
   // either a leaf (containing a window ID) or an internal node (splitting
   // the space between two children).
   //
-  struct split_node
+  struct layout_node
   {
     bool      is_leaf {true};
     window_id win {invalid_window};
-    split_dir dir {split_dir::vertical};
+    layout_direction dir {layout_direction::vertical};
     float     ratio {0.5f};
-    split_ptr child1;
-    split_ptr child2;
+    layout_tree child1;
+    layout_tree child2;
 
     bool
-    operator == (const split_node& o) const
+    operator == (const layout_node& o) const
     {
       if (is_leaf != o.is_leaf)
         return false;
@@ -156,12 +156,12 @@ namespace mine
     }
   };
 
-  inline split_ptr::
-  split_ptr (const split_node& n)
-    : box_ (immer::box<split_node> (n)) {}
+  inline layout_tree::
+  layout_tree (const layout_node& n)
+    : box_ (immer::box<layout_node> (n)) {}
 
   inline bool
-  split_ptr::operator == (const split_ptr& o) const
+  layout_tree::operator == (const layout_tree& o) const
   {
     if (box_.has_value () != o.box_.has_value ())
       return false;
@@ -178,7 +178,7 @@ namespace mine
   //
   // This bridges our logical split tree to the physical rendering grid.
   //
-  struct window_layout
+  struct window_partition
   {
     window_id     win;
     std::uint16_t x;
@@ -194,55 +194,55 @@ namespace mine
   // that because the layout and open windows are part of the state, we can
   // literally "undo" closing a split.
   //
-  class state
+  class workspace
   {
   public:
-    state ();
+    workspace ();
 
     explicit
-    state (text_buffer b,
+    workspace (content b,
            mine::cursor c,
-           mine::view v,
+           mine::viewport v,
            bool m = false,
-           cmdline_state cmd = {});
+           command_line cmd = {});
 
     // Accessors.
     //
 
-    const text_buffer&
-    buffer () const noexcept
+    const content&
+    active_content () const noexcept
     {
-      return buffers_.at (windows_.at (active_window_).buf).content;
+      return buffers_.at (windows_.at (active_window_).doc).text;
     }
 
     const mine::cursor&
     get_cursor () const noexcept
     {
-      return windows_.at (active_window_).cur;
+      return windows_.at (active_window_).cursor;
     }
 
-    const mine::view&
+    const mine::viewport&
     view () const noexcept
     {
-      return windows_.at (active_window_).vw;
+      return windows_.at (active_window_).viewport;
     }
 
     bool
     modified () const noexcept
     {
-      return buffers_.at (windows_.at (active_window_).buf).modified;
+      return buffers_.at (windows_.at (active_window_).doc).modified;
     }
 
-    const cmdline_state&
+    const command_line&
     cmdline () const noexcept
     {
       return cmd_;
     }
 
-    buffer_id
-    active_buffer_id () const noexcept
+    document_id
+    active_document_id () const noexcept
     {
-      return windows_.at (active_window_).buf;
+      return windows_.at (active_window_).doc;
     }
 
     window_id
@@ -251,20 +251,20 @@ namespace mine
       return active_window_;
     }
 
-    buffer_id
-    next_buffer_id () const noexcept
+    document_id
+    next_document_id () const noexcept
     {
-      return next_buffer_id_;
+      return next_document_id_;
     }
 
-    const window_state&
+    const editor_window&
     get_window (window_id id) const
     {
       return windows_.at (id);
     }
 
-    const buffer_state&
-    get_buffer (buffer_id id) const
+    const document&
+    get_document (document_id id) const
     {
       return buffers_.at (id);
     }
@@ -276,95 +276,95 @@ namespace mine
     }
 
     void
-    get_layout (std::vector<window_layout>& out,
+    get_layout (std::vector<window_partition>& out,
                 std::uint16_t w,
                 std::uint16_t h) const;
 
     // Transitions.
     //
 
-    state
-    with_buffer (text_buffer b) const;
+    [[nodiscard]] workspace
+    with_content (content b) const;
 
-    state
+    [[nodiscard]] workspace
     with_cursor (mine::cursor c) const;
 
-    state
-    with_view (mine::view v) const;
+    [[nodiscard]] workspace
+    with_view (mine::viewport v) const;
 
-    state
+    [[nodiscard]] workspace
     with_modified (bool m) const;
 
-    state
-    with_cmdline (cmdline_state cmd) const;
+    [[nodiscard]] workspace
+    with_cmdline (command_line cmd) const;
 
-    state
+    [[nodiscard]] workspace
     with_cmdline_message (std::string m) const;
 
-    state
-    update (text_buffer b, mine::cursor c) const;
+    [[nodiscard]] workspace
+    update (content b, mine::cursor c) const;
 
     // Multi-buffer / multi-window transitions.
     //
 
-    state
-    with_new_buffer (text_buffer b, std::string name) const;
+    [[nodiscard]] workspace
+    with_new_document (content b, std::string name) const;
 
-    state
-    update_buffer (buffer_id id, text_buffer b) const;
+    [[nodiscard]] workspace
+    update_document (document_id id, content b) const;
 
-    state
-    switch_buffer (buffer_id id) const;
+    [[nodiscard]] workspace
+    switch_document (document_id id) const;
 
-    state
-    split_active_window (split_dir dir) const;
+    [[nodiscard]] workspace
+    split_active_window (layout_direction dir) const;
 
-    state
+    [[nodiscard]] workspace
     close_active_window () const;
 
-    state
+    [[nodiscard]] workspace
     switch_window (int dx, int dy) const;
 
-    state
+    [[nodiscard]] workspace
     switch_window_direct (window_id id) const;
 
-    state
+    [[nodiscard]] workspace
     resize_layout (screen_size s) const;
 
     auto
-    operator <=> (const state&) const = delete;
+    operator <=> (const workspace&) const = delete;
 
   private:
-    immer::map<buffer_id, buffer_state> buffers_;
-    immer::map<window_id, window_state> windows_;
-    split_ptr layout_;
+    immer::map<document_id, document> buffers_;
+    immer::map<window_id, editor_window> windows_;
+    layout_tree layout_;
 
     window_id active_window_ {invalid_window};
-    buffer_id next_buffer_id_ {buffer_id {1}};
+    document_id next_document_id_ {document_id {1}};
     window_id next_window_id_ {window_id {1}};
     screen_size screen_size_ {24, 80};
 
-    cmdline_state cmd_;
+    command_line cmd_;
 
     static void
-    compute_layout (const split_ptr& node,
+    compute_layout (const layout_tree& node,
                     std::uint16_t x,
                     std::uint16_t y,
                     std::uint16_t w,
                     std::uint16_t h,
-                    std::vector<window_layout>& out);
+                    std::vector<window_partition>& out);
 
-    static split_ptr
-    insert_split (const split_ptr& node,
+    static layout_tree
+    insert_split (const layout_tree& node,
                   window_id target,
                   window_id new_win,
-                  split_dir dir);
+                  layout_direction dir);
 
-    static split_ptr
-    remove_window (const split_ptr& node, window_id target, bool& removed);
+    static layout_tree
+    remove_window (const layout_tree& node, window_id target, bool& removed);
 
     static window_id
-    find_first_leaf (const split_ptr& node);
+    find_first_leaf (const layout_tree& node);
   };
 
   // The time machine.
@@ -372,43 +372,43 @@ namespace mine
   // We store a linear sequence of states. Because of structural sharing in
   // immer, this doesn't consume much RAM even for thousands of steps.
   //
-  class history
+  class edit_history
   {
   public:
-    using container_type = immer::vector<state>;
+    using container_type = immer::vector<workspace>;
 
-    history ()
-      : s_ (container_type {state {}}),
+    edit_history ()
+      : s_ (container_type {workspace {}}),
         i_ (0)
     {
     }
 
     explicit
-    history (state s)
+    edit_history (workspace s)
       : s_ (container_type {std::move (s)}),
         i_ (0)
     {
     }
 
-    const state&
+    const workspace&
     current () const noexcept
     {
       return s_[i_];
     }
 
-    history
-    push (state s) const
+    [[nodiscard]] edit_history
+    push (workspace s) const
     {
       auto ns (s_.take (i_ + 1));
       ns = ns.push_back (std::move (s));
-      return history (std::move (ns), i_ + 1);
+      return edit_history (std::move (ns), i_ + 1);
     }
 
-    history
-    replace_current (state s) const
+    [[nodiscard]] edit_history
+    replace_current (workspace s) const
     {
       auto ns (s_.set (i_, std::move (s)));
-      return history (std::move (ns), i_);
+      return edit_history (std::move (ns), i_);
     }
 
     bool
@@ -423,22 +423,22 @@ namespace mine
       return i_ + 1 < s_.size ();
     }
 
-    history
+    [[nodiscard]] edit_history
     undo () const
     {
       if (!can_undo ())
         return *this;
 
-      return history (s_, i_ - 1);
+      return edit_history (s_, i_ - 1);
     }
 
-    history
+    [[nodiscard]] edit_history
     redo () const
     {
       if (!can_redo ())
         return *this;
 
-      return history (s_, i_ + 1);
+      return edit_history (s_, i_ + 1);
     }
 
     std::size_t
@@ -448,7 +448,7 @@ namespace mine
     }
 
   private:
-    history (container_type s, std::size_t i)
+    edit_history (container_type s, std::size_t i)
       : s_ (std::move (s)),
         i_ (i)
     {
@@ -459,5 +459,5 @@ namespace mine
     std::size_t i_;
   };
 
-  using editor_state = state;
+
 }

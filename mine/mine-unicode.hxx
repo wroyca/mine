@@ -14,9 +14,6 @@
 #include <unicode/unistr.h>
 #include <unicode/utypes.h>
 
-#include <mine/mine-contract.hxx>
-#include <mine/mine-predefs.hxx>
-
 namespace mine
 {
   // Unicode Correctness Assertions
@@ -69,7 +66,7 @@ namespace mine
   // Buffer & Cursor Consistency
   //
 
-  class text_buffer;
+  class content;
   class cursor;
   struct cursor_position;
 
@@ -81,12 +78,12 @@ namespace mine
   //    line's index.
   //
   void
-  assert_cursor_aligned (const cursor&, const text_buffer&);
+  assert_cursor_aligned (const cursor&, const content&);
 
   // Weaker check: just validate coordinates are within array bounds.
   //
   void
-  assert_cursor_valid (const cursor_position&, const text_buffer&);
+  assert_cursor_valid (const cursor_position&, const content&);
 
   // Verify the integrity of the line cache.
   //
@@ -126,11 +123,8 @@ namespace mine
     // ICU iterators are heavy objects with internal state caches. Copying them
     // is expensive and rarely what you want.
     //
-    icu_break_iterator (const icu_break_iterator&)
-      = MINE_CPP_DELETED_FUNCTION("ICU iterators hold unique pointers and heavy internal state; use move semantics instead");
-
-    icu_break_iterator& operator= (const icu_break_iterator&)
-      = MINE_CPP_DELETED_FUNCTION("ICU iterators hold unique pointers and heavy internal state; use move semantics instead");
+    icu_break_iterator (const icu_break_iterator&) = delete;
+    icu_break_iterator& operator= (const icu_break_iterator&)= delete;
 
     icu_break_iterator (icu_break_iterator&&) noexcept = default;
     icu_break_iterator& operator= (icu_break_iterator&&) noexcept = default;
@@ -379,11 +373,8 @@ namespace mine
     // elsewhere, just recompute it; if you are copying the string, you likely
     // need a new cache anyway).
     //
-    grapheme_index (const grapheme_index&)
-      = MINE_CPP_DELETED_FUNCTION("Copying a segmentation cache is a logical error; recompute or move instead");
-
-    grapheme_index& operator= (const grapheme_index&)
-      = MINE_CPP_DELETED_FUNCTION("Copying a segmentation cache is a logical error; recompute or move instead");
+    grapheme_index (const grapheme_index&) = delete;
+    grapheme_index& operator= (const grapheme_index&) = delete;
 
     grapheme_index (grapheme_index&&) noexcept = default;
     grapheme_index& operator= (grapheme_index&&) noexcept = default;

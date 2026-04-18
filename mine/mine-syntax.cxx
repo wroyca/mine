@@ -1,5 +1,4 @@
 #include <mine/mine-syntax.hxx>
-#include <mine/mine-contract.hxx>
 #include <mine/mine-utility.hxx>
 
 #ifdef _WIN32
@@ -200,13 +199,13 @@ namespace mine
   }
 
   void syntax_highlighter::
-  update (const text_buffer& b)
+  update (const content& b)
   {
     if (lang_ == nullptr)
       return;
 
     // Fast path: if the buffer hasn't changed since the last time we
-    // parsed it, we don't need to do anything. text_buffer uses structural
+    // parsed it, we don't need to do anything. content uses structural
     // sharing, so this is a very cheap equality check.
     //
     if (b == last_buffer_)

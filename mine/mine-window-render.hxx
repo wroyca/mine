@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <mine/mine-core-state.hxx>
+#include <mine/mine-workspace.hxx>
 #include <mine/mine-window-opengl-composition-spatial-camera.hxx>
 #include <mine/mine-window-opengl-device.hxx>
 #include <mine/mine-window-opengl-typography-atlas.hxx>
@@ -47,7 +47,7 @@ namespace mine
     load_font (std::string_view p, std::uint32_t s);
 
     void
-    render (const editor_state& s, bool track = false);
+    render (const workspace& s, bool track = false);
 
     void
     resize (int w, int h);
@@ -56,7 +56,7 @@ namespace mine
     update (float dt);
 
     void
-    scroll (float dx, float dy, const editor_state& s);
+    scroll (float dx, float dy, const workspace& s);
 
     bool
     is_animating () const;
@@ -64,7 +64,7 @@ namespace mine
     // Map a physical pixel coordinate to a terminal-compatible grid coordinate.
     //
     screen_position
-    screen_to_grid (float px, float py, const editor_state& s);
+    screen_to_grid (float px, float py, const workspace& s);
 
     float
     line_height () const

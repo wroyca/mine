@@ -11,10 +11,11 @@
 #include <immer/vector.hpp>
 #include <immer/vector_transient.hpp>
 
-#include <mine/mine-contract.hxx>
-#include <mine/mine-core-state.hxx>
+#include <mine/mine-workspace.hxx>
 #include <mine/mine-syntax.hxx>
 #include <mine/mine-types.hxx>
+
+#include <mine/mine-contract.hxx>
 
 // Platform specifics.
 //
@@ -291,50 +292,11 @@ namespace mine
   // user resized the window, the whole coordinate system shifted, so a diff
   // is meaningless (and we should force a full redraw instead).
   //
-  inline screen_diff
+  screen_diff
   compute_screen_diff (const terminal_screen& old_s,
                        const terminal_screen& new_s,
                        std::uint16_t row_start = 0,
-                       std::uint16_t row_count = 0)
-  {
-    MINE_PRECONDITION (old_s.size () == new_s.size ());
-
-    screen_diff d;
-    screen_size sz (new_s.size ());
-
-    // If count is 0 (default), go to the end.
-    //
-    if (row_count == 0)
-      row_count = sz.rows - row_start;
-
-    // Sanity check the bounds.
-    //
-    std::uint16_t row_end (std::min<uint16_t> (row_start + row_count, sz.rows));
-
-    if (old_s.cells() == new_s.cells())
-        return d;
-
-    // Linear scan.
-    //
-    // Because we flattened the vector in `terminal_screen`, this loop walks
-    // contiguous memory. (CPU prefetcher will love this ;) ).
-    //
-    for (std::uint16_t r (row_start); r < row_end; ++r)
-    {
-      for (std::uint16_t c (0); c < sz.cols; ++c)
-      {
-        screen_position p (r, c);
-
-        // We rely on `terminal_cell::operator==` here. If the content, color,
-        // or attributes are different, we record a change.
-        //
-        if (old_s.at (p) != new_s.at (p))
-          d.changes.push_back ({p, new_s.at (p)});
-      }
-    }
-
-    return d;
-  }
+                       std::uint16_t row_count = 0);
 
   // RAII wrapper for setting the terminal to "raw" mode.
   //
@@ -611,7 +573,7 @@ namespace mine
     // current frame, emits the ANSI codes, and updates the internal state.
     //
     void
-    render (const editor_state& state);
+    render (const workspace& state);
 
     // Optimized render for cursor movement only.
     //
@@ -620,7 +582,7 @@ namespace mine
     // and just emit the cursor jump code.
     //
     void
-    render_cursor_only (const editor_state& state);
+    render_cursor_only (const workspace& state);
 
     // Hard reset.
     //
@@ -629,7 +591,7 @@ namespace mine
     // garbled by external noise (e.g., printf debugging).
     //
     void
-    force_redraw (const editor_state& state);
+    force_redraw (const workspace& state);
 
     // Handle terminal window resize.
     //
@@ -655,13 +617,13 @@ namespace mine
     // Composition helpers.
     //
     terminal_screen
-    build_screen (const editor_state& state) const;
+    build_screen (const workspace& state) const;
 
     void
-    draw_buffer (terminal_screen_builder& screen, const editor_state& state) const;
+    draw_buffer (terminal_screen_builder& screen, const workspace& state) const;
 
     void
-    draw_cmdline (terminal_screen_builder& screen, const editor_state& state) const;
+    draw_cmdline (terminal_screen_builder& screen, const workspace& state) const;
 
     // ANSI Output helpers.
     //
@@ -669,7 +631,7 @@ namespace mine
     apply_diff (const screen_diff& diff);
 
     void
-    position_cursor (const editor_state& state);
+    position_cursor (const workspace& state);
 
     void
     move_cursor (screen_position pos);

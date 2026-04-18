@@ -7,7 +7,7 @@
 #include <optional>
 
 #include <mine/mine-treesitter.hxx>
-#include <mine/mine-core-buffer.hxx>
+#include <mine/mine-content.hxx>
 
 namespace mine
 {
@@ -73,11 +73,11 @@ namespace mine
 
     // Sync the syntax tree with the current buffer state.
     //
-    // Because text_buffer uses structural sharing, checking if the buffer
+    // Because content uses structural sharing, checking if the buffer
     // changed is an O(1) pointer comparison. If it did, we re-parse.
     //
     void
-    update (const text_buffer& b);
+    update (const content& b);
 
     // Execute the highlighting query over a specific line range.
     //
@@ -108,6 +108,6 @@ namespace mine
     std::optional<syntax_query> query_;
     std::optional<syntax_tree> tree_;
 
-    text_buffer last_buffer_;
+    content last_buffer_;
   };
 }

@@ -1,4 +1,4 @@
-#include <mine/mine-core-cursor.hxx>
+#include <mine/mine-cursor.hxx>
 
 #include <algorithm>
 
@@ -15,7 +15,7 @@ namespace mine
   }
 
   cursor cursor::
-  move_left (const text_buffer& b) const noexcept
+  move_left (const content& b) const noexcept
   {
     // If there's still room on the current line, we just step back by one
     // cluster. Simple enough.
@@ -45,7 +45,7 @@ namespace mine
   }
 
   cursor cursor::
-  move_right (const text_buffer& b) const noexcept
+  move_right (const content& b) const noexcept
   {
     size_t n (b.line_length (p_.line));
 
@@ -67,7 +67,7 @@ namespace mine
   }
 
   cursor cursor::
-  move_up (const text_buffer& b) const noexcept
+  move_up (const content& b) const noexcept
   {
     if (p_.line.value > 0)
     {
@@ -87,7 +87,7 @@ namespace mine
   }
 
   cursor cursor::
-  move_down (const text_buffer& b) const noexcept
+  move_down (const content& b) const noexcept
   {
     if (p_.line.value + 1 < b.line_count ())
     {
@@ -114,7 +114,7 @@ namespace mine
   }
 
   cursor cursor::
-  move_line_end (const text_buffer& b) const noexcept
+  move_line_end (const content& b) const noexcept
   {
     // Find how many clusters are in this line and snap to the end.
     //
@@ -129,7 +129,7 @@ namespace mine
   }
 
   cursor cursor::
-  move_buffer_end (const text_buffer& b) const noexcept
+  move_buffer_end (const content& b) const noexcept
   {
     // An empty buffer is a special case. If there are no lines, we just point
     // to (0,0).
@@ -144,7 +144,7 @@ namespace mine
   }
 
   cursor cursor::
-  clamp_to_buffer (const text_buffer& b) const noexcept
+  clamp_to_buffer (const content& b) const noexcept
   {
     cursor c (*this);
 

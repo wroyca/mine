@@ -12,7 +12,7 @@
 #include <immer/flex_vector.hpp>
 
 #include <mine/mine-types.hxx>
-#include <mine/mine-core-buffer.hxx>
+#include <mine/mine-content.hxx>
 
 namespace mine
 {
@@ -35,7 +35,7 @@ namespace mine
   struct no_file
   {
     immer::box<std::string> name = "*unnamed*";
-    text_buffer content = {};
+    mine::content text = {};
 
     bool operator== (const no_file&) const = default;
   };
@@ -48,7 +48,7 @@ namespace mine
   struct existing_file
   {
     immer::box<std::string> name;
-    text_buffer content;
+    mine::content text;
 
     bool operator== (const existing_file&) const = default;
   };
@@ -62,7 +62,7 @@ namespace mine
   struct loading_file
   {
     immer::box<std::string> name;
-    text_buffer content;
+    mine::content text;
     std::size_t loaded_bytes;
     std::size_t total_bytes;
 
@@ -84,7 +84,7 @@ namespace mine
   struct saving_file
   {
     immer::box<std::string> name;
-    text_buffer content;
+    mine::content text;
     std::size_t saved_lines;
 
     bool operator== (const saving_file&) const = default;
@@ -141,26 +141,26 @@ namespace mine
   //
   // This aggregates the buffer content with its metadata (state).
   //
-  struct file_buffer
+  struct file_document
   {
     file_state state;
-    text_buffer content;
+    mine::content text;
 
-    file_buffer ()
+    file_document ()
       : state (no_file {}),
-        content (make_empty_buffer ())
+        text (make_empty_content ())
     {
     }
 
-    explicit file_buffer (text_buffer c)
+    explicit file_document (mine::content c)
       : state (no_file {}),
-        content (std::move (c))
+        text (std::move (c))
     {
     }
 
-    file_buffer (file_state s, text_buffer c)
+    file_document (file_state s, mine::content c)
       : state (std::move (s)),
-        content (std::move (c))
+        text (std::move (c))
     {
     }
 
@@ -188,7 +188,7 @@ namespace mine
     std::optional<float>
     progress_percent () const noexcept;
 
-    bool operator== (const file_buffer&) const = delete;
+    bool operator== (const file_document&) const = delete;
   };
 
   // Effects.
@@ -207,17 +207,17 @@ namespace mine
   // {new_state, effect}.
   //
 
-  std::pair<file_buffer, file_io_effect>
-  load_file (file_buffer b, const std::string& name);
+  std::pair<file_document, file_io_effect>
+  load_file (file_document b, const std::string& name);
 
-  std::pair<file_buffer, file_io_effect>
-  save_file (file_buffer b);
+  std::pair<file_document, file_io_effect>
+  save_file (file_document b);
 
   // The reducer for I/O actions.
   //
   // Returns the new buffer and an optional status message (e.g., "Saved",
   // "Error: ...") for the UI to display.
   //
-  std::pair<file_buffer, std::optional<std::string>>
-  update_file_buffer (file_buffer b, file_io_action a);
+  std::pair<file_document, std::optional<std::string>>
+  update_file_document (file_document b, file_io_action a);
 }

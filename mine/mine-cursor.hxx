@@ -4,8 +4,9 @@
 #include <optional>
 
 #include <mine/mine-types.hxx>
+#include <mine/mine-content.hxx>
+
 #include <mine/mine-contract.hxx>
-#include <mine/mine-core-buffer.hxx>
 
 namespace mine
 {
@@ -84,41 +85,41 @@ namespace mine
     // Navigation
     //
 
-    cursor
+    [[nodiscard]] cursor
     move_to (cursor_position p) const noexcept;
 
-    cursor
-    move_left (const text_buffer& b) const noexcept;
+    [[nodiscard]] cursor
+    move_left (const content& b) const noexcept;
 
-    cursor
-    move_right (const text_buffer& b) const noexcept;
+    [[nodiscard]] cursor
+    move_right (const content& b) const noexcept;
 
-    cursor
-    move_up (const text_buffer& b) const noexcept;
+    [[nodiscard]] cursor
+    move_up (const content& b) const noexcept;
 
-    cursor
-    move_down (const text_buffer& b) const noexcept;
+    [[nodiscard]] cursor
+    move_down (const content& b) const noexcept;
 
     // Semantic Jumps
     //
 
-    cursor
+    [[nodiscard]] cursor
     move_line_start () const noexcept;
 
-    cursor
-    move_line_end (const text_buffer& b) const noexcept;
+    [[nodiscard]] cursor
+    move_line_end (const content& b) const noexcept;
 
-    cursor
+    [[nodiscard]] cursor
     move_buffer_start () const noexcept;
 
-    cursor
-    move_buffer_end (const text_buffer& b) const noexcept;
+    [[nodiscard]] cursor
+    move_buffer_end (const content& b) const noexcept;
 
     // Validation
     //
 
-    cursor
-    clamp_to_buffer (const text_buffer& b) const noexcept;
+    [[nodiscard]] cursor
+    clamp_to_buffer (const content& b) const noexcept;
 
     auto
     operator<=> (const cursor&) const noexcept = default;

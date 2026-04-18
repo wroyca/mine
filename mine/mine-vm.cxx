@@ -1,10 +1,11 @@
 #include <mine/mine-vm.hxx>
-#include <mine/mine-contract.hxx>
 
 #include <cstring>
 #include <iostream>
 
 #include <lua.hpp>
+
+#include <mine/mine-contract.hxx>
 
 using namespace std;
 
@@ -18,7 +19,7 @@ namespace mine
     lua_print_bridge (lua_State* l)
     {
       int n (lua_gettop (l));
-      std::string r;
+      string r;
 
       // We need Lua's tostring function to format the arguments.
       //
@@ -60,12 +61,12 @@ namespace mine
 
       if (lua_islightuserdata (l, -1))
       {
-        using cb = std::function<void (std::string_view)>;
+        using cb = function<void (string_view)>;
         auto* h (static_cast<cb*> (lua_touserdata (l, -1)));
         (*h) (r);
       }
       else
-        std::cout << r << '\n';
+        cout << r << '\n';
 
       lua_pop (l, 1);
       return 0;
@@ -400,7 +401,7 @@ void vm::
   }
 
   void vm::
-  set_print_handler (std::function<void (std::string_view)>* h)
+  set_print_handler (function<void (string_view)>* h)
   {
     MINE_PRECONDITION (is_ready ());
 

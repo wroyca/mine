@@ -2,6 +2,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include <mine/mine-contract.hxx>
+
 using namespace std;
 
 namespace mine

@@ -1,11 +1,12 @@
 
 #include <mine/mine-window-render.hxx>
-#include <mine/mine-contract.hxx>
 #include <mine/mine-unicode.hxx>
 #include <mine/mine-window-opengl-typography-material.hxx>
 
 #include <algorithm>
 #include <string>
+
+#include <mine/mine-contract.hxx>
 
 using namespace std;
 
@@ -355,9 +356,9 @@ namespace mine
   }
 
   void window_renderer::
-  render (const editor_state& s, bool tk)
+  render (const workspace& s, bool tk)
   {
-    highlighter_.update (s.buffer ());
+    highlighter_.update (s.active_content ());
 
     vector<window_id> tr;
 
@@ -392,7 +393,7 @@ namespace mine
     uint16_t lw (static_cast<uint16_t> (screen_w_ / (lh * 0.5f)));
     uint16_t lg (static_cast<uint16_t> ((screen_h_ - lh) / lh));
 
-    vector<window_layout> ls;
+    vector<window_partition> ls;
     s.get_layout (ls, lw, lg);
 
     // Dynamically query max layout dimensions so we don't depend on the layout
@@ -413,7 +414,7 @@ namespace mine
       v_sld_.clear ();
 
       const auto& ws (s.get_window (l.win));
-      const auto& bs (s.get_buffer (ws.buf));
+      const auto& bs (s.get_document (ws.doc));
       bool a (l.win == s.active_window ());
 
       auto& cm (cams_[l.win]);
@@ -443,8 +444,8 @@ namespace mine
       dev_.set_scissor (px, gy, pw, th);
       dev_.set_scissor_enabled (true);
 
-      const auto& bc (bs.content);
-      const auto& cu (ws.cur);
+      const auto& bc (bs.text);
+      const auto& cu (ws.cursor);
 
       // Figure out our selection boundaries. If the cursor has an active mark,
       // we need to sort the start and end positions so our sweep logic works
@@ -726,7 +727,7 @@ namespace mine
     for (const auto& l : ls)
     {
       const auto& ws (s.get_window (l.win));
-      const auto& bs (s.get_buffer (ws.buf));
+      const auto& bs (s.get_document (ws.doc));
       bool a (l.win == s.active_window ());
 
       float px (static_cast<float> (l.x) * (lh * 0.5f));
@@ -754,8 +755,8 @@ namespace mine
                     bg,
                     0.0f);
 
-      string st (" Line " + to_string (ws.cur.line ().value + 1) + ", Col " +
-                 to_string (ws.cur.column ().value + 1));
+      string st (" Line " + to_string (ws.cursor.line ().value + 1) + ", Col " +
+                 to_string (ws.cursor.column ().value + 1));
 
       if (bs.modified)
         st += " [Modified]";
@@ -948,7 +949,7 @@ namespace mine
   }
 
   void window_renderer::
-  scroll (float dx, float dy, const editor_state& s)
+  scroll (float dx, float dy, const workspace& s)
   {
     float lh (rast_.line_height ());
 
@@ -965,7 +966,7 @@ namespace mine
       uint16_t lw (static_cast<uint16_t> (screen_w_ / (lh * 0.5f)));
       uint16_t lg (static_cast<uint16_t> ((screen_h_ - lh) / lh));
 
-      vector<window_layout> ls;
+      vector<window_partition> ls;
       s.get_layout (ls, lw, lg);
 
       uint16_t mb (0);
@@ -977,7 +978,7 @@ namespace mine
         if (l.win == s.active_window ())
         {
           const auto& ws (s.get_window (l.win));
-          const auto& bs (s.get_buffer (ws.buf));
+          const auto& bs (s.get_document (ws.doc));
 
           float py (static_cast<float> (l.y) * lh);
           float ph (static_cast<float> (l.h) * lh);
@@ -988,7 +989,7 @@ namespace mine
           float th (max (0.0f, dh - lh));
           float ms (
             max (0.0f,
-                 static_cast<float> (bs.content.line_count ()) * lh - th));
+                 static_cast<float> (bs.text.line_count ()) * lh - th));
 
           it->second.clamp_scroll (0.0f, ms);
           break;
@@ -1008,7 +1009,7 @@ namespace mine
   }
 
   screen_position window_renderer::
-  screen_to_grid (float px, float py, const editor_state& s)
+  screen_to_grid (float px, float py, const workspace& s)
   {
     float lh (rast_.line_height ());
     if (lh <= 0.0f)
@@ -1017,7 +1018,7 @@ namespace mine
     uint16_t lw (static_cast<uint16_t> (screen_w_ / (lh * 0.5f)));
     uint16_t lg (static_cast<uint16_t> ((screen_h_ - lh) / lh));
 
-    vector<window_layout> ls;
+    vector<window_partition> ls;
     s.get_layout (ls, lw, lg);
 
     uint16_t mr (0), mb (0);
@@ -1051,7 +1052,7 @@ namespace mine
         //
         vec2 w (it->second.screen_to_world (vec2 (px - wx, py - wy)));
 
-        const auto& bf (s.get_buffer (s.get_window (l.win).buf).content);
+        const auto& bf (s.get_document (s.get_window (l.win).doc).text);
         if (bf.line_count () == 0)
           return screen_position (l.y, l.x);
 
@@ -1092,7 +1093,7 @@ namespace mine
           tc += static_cast<uint16_t> (gw > 0 ? gw : 1);
         }
 
-        int rw (ln - static_cast<int> (s.get_window (l.win).vw.top ().value));
+        int rw (ln - static_cast<int> (s.get_window (l.win).viewport.top ().value));
         return screen_position (l.y + static_cast<uint16_t> (max (0, rw)),
                                 l.x + tc);
       }

@@ -5,6 +5,8 @@
 #include <sstream>
 #include <algorithm>
 
+#include <mine/mine-contract.hxx>
+
 using namespace std;
 
 namespace mine
@@ -45,12 +47,12 @@ namespace mine
   }
 
   void terminal_renderer::
-  render (const editor_state& s)
+  render (const workspace& s)
   {
     // Make sure the highlighter is up to date with the latest buffer contents
     // before we start projecting the view onto the screen.
     //
-    highlighter_.update (s.buffer ());
+    highlighter_.update (s.active_content ());
 
     // Begin synchronized update (DEC Private Mode 2026).
     //
@@ -108,7 +110,7 @@ namespace mine
   }
 
   void terminal_renderer::
-  render_cursor_only (const editor_state& s)
+  render_cursor_only (const workspace& s)
   {
     // Begin synchronized update.
     //
@@ -146,7 +148,7 @@ namespace mine
     if (!d.empty ())
     {
       apply_diff (d);
-      current_screen_ = std::move (n);
+      current_screen_ = move (n);
     }
 
     position_cursor (s);
@@ -157,7 +159,7 @@ namespace mine
   }
 
   void terminal_renderer::
-  force_redraw (const editor_state& s)
+  force_redraw (const workspace& s)
   {
     // The "Panic Button".
     //
@@ -220,7 +222,7 @@ namespace mine
   }
 
   terminal_screen terminal_renderer::
-  build_screen (const editor_state& s) const
+  build_screen (const workspace& s) const
   {
     terminal_screen_builder b (current_screen_.size ());
 
@@ -231,10 +233,10 @@ namespace mine
   }
 
   void terminal_renderer::
-  draw_buffer (terminal_screen_builder& b, const editor_state& s) const
+  draw_buffer (terminal_screen_builder& b, const workspace& s) const
   {
     auto sz (b.size ());
-    std::vector<window_layout> ls;
+    vector<window_partition> ls;
 
     // Reserve the bottom-most row exclusively for the prompt stream handler.
     //
@@ -243,12 +245,12 @@ namespace mine
     for (const auto& l : ls)
     {
       const auto& ws (s.get_window (l.win));
-      const auto& bs (s.get_buffer (ws.buf));
+      const auto& bs (s.get_document (ws.doc));
       bool a (s.active_window () == l.win);
 
-      const auto& bc (bs.content);
-      const auto& vw (ws.vw);
-      const auto& cu (ws.cur);
+      const auto& bc (bs.text);
+      const auto& vw (ws.viewport);
+      const auto& cu (ws.cursor);
 
       // Figure out the selection bounds upfront. We normalize them so that the
       // start is always before the end, which makes our hit-testing during
@@ -455,7 +457,7 @@ namespace mine
   }
 
   void terminal_renderer::
-  draw_cmdline (terminal_screen_builder& b, const editor_state& s) const
+  draw_cmdline (terminal_screen_builder& b, const workspace& s) const
   {
     auto sz (b.size ());
     if (sz.rows == 0) return;
@@ -529,7 +531,7 @@ namespace mine
   }
 
   void terminal_renderer::
-  position_cursor (const editor_state& s)
+  position_cursor (const workspace& s)
   {
     auto& cl (s.cmdline ());
 
@@ -547,9 +549,9 @@ namespace mine
       //
       uint16_t c (1);
 
-      std::string_view v (cl.content);
-      std::size_t p (cl.cursor_pos);
-      std::size_t i (0);
+      string_view v (cl.content);
+      size_t p (cl.cursor_pos);
+      size_t i (0);
 
       // Advance through the content up to the cursor position to calculate its
       // true visual width on the screen. We have to do this grapheme by
@@ -557,7 +559,7 @@ namespace mine
       //
       while (i < p && i < v.size ())
       {
-        std::size_t n (next_grapheme_boundary (v, i));
+        size_t n (next_grapheme_boundary (v, i));
         int w (estimate_grapheme_width (v.substr (i, n - i)));
 
         // Treat zero or negative width graphemes as width 1 so we don't end up
@@ -574,10 +576,10 @@ namespace mine
     }
 
     auto sz (current_screen_.size ());
-    std::vector<window_layout> ls;
+    vector<window_partition> ls;
     s.get_layout (ls, sz.cols, sz.rows > 0 ? sz.rows - 1 : 0);
 
-    const window_layout* aw (nullptr);
+    const window_partition* aw (nullptr);
 
     for (const auto& l : ls)
     {
@@ -595,11 +597,11 @@ namespace mine
     }
 
     const auto& ws (s.get_window (aw->win));
-    const auto& bs (s.get_buffer (ws.buf));
+    const auto& bs (s.get_document (ws.doc));
 
-    const auto& vw (ws.vw);
-    const auto& cu (ws.cur);
-    const auto& bf (bs.content);
+    const auto& vw (ws.viewport);
+    const auto& cu (ws.cursor);
+    const auto& bf (bs.text);
 
     // Convert Logical (Line, Grapheme) -> Physical (Screen Row, Screen Col).
     //
@@ -623,7 +625,7 @@ namespace mine
 
         // We need to process 'target' number of graphemes.
         //
-        std::size_t tg (cu.column ().value);
+        size_t tg (cu.column ().value);
 
         for (auto i (rg.begin ()); i != rg.end () && tg > 0; ++i, --tg)
         {
@@ -725,5 +727,38 @@ namespace mine
     // CSI ? 2026 l
     //
     write ("\x1b[?2026l");
+  }
+
+  screen_diff
+  compute_screen_diff (const terminal_screen& old_s,
+                       const terminal_screen& new_s,
+                       uint16_t row_start,
+                       uint16_t row_count)
+  {
+    MINE_PRECONDITION (old_s.size () == new_s.size ());
+
+    screen_diff d;
+    screen_size sz (new_s.size ());
+
+    if (row_count == 0)
+      row_count = sz.rows - row_start;
+
+    uint16_t row_end (min<uint16_t> (row_start + row_count, sz.rows));
+
+    if (old_s.cells() == new_s.cells())
+        return d;
+
+    for (uint16_t r (row_start); r < row_end; ++r)
+    {
+      for (uint16_t c (0); c < sz.cols; ++c)
+      {
+        screen_position p (r, c);
+
+        if (old_s.at (p) != new_s.at (p))
+          d.changes.push_back ({p, new_s.at (p)});
+      }
+    }
+
+    return d;
   }
 }

@@ -242,30 +242,30 @@ namespace mine
   // Editor identity types.
   //
 
-  struct buffer_id
+  struct document_id
   {
     std::uint32_t value;
 
     constexpr explicit
-    buffer_id (std::uint32_t v = 0) noexcept
+    document_id (std::uint32_t v = 0) noexcept
       : value (v)
     {
     }
 
     constexpr auto
-    operator<=> (const buffer_id&) const = default;
+    operator<=> (const document_id&) const = default;
 
-    constexpr buffer_id&
+    constexpr document_id&
     operator++ () noexcept
     {
       ++value;
       return *this;
     }
 
-    constexpr buffer_id
+    constexpr document_id
     operator++ (int) noexcept
     {
-      buffer_id r (*this);
+      document_id r (*this);
       ++value;
       return r;
     }
@@ -372,10 +372,10 @@ namespace mine
 // Hash specializations for strong ID types.
 //
 template <>
-struct std::hash<mine::buffer_id>
+struct std::hash<mine::document_id>
 {
   constexpr std::size_t
-  operator() (mine::buffer_id id) const noexcept
+  operator() (mine::document_id id) const noexcept
   {
     return std::hash<std::uint32_t> {} (id.value);
   }

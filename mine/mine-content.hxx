@@ -11,8 +11,9 @@
 #include <immer/algorithm.hpp>
 
 #include <mine/mine-types.hxx>
-#include <mine/mine-contract.hxx>
 #include <mine/mine-unicode.hxx>
+
+#include <mine/mine-contract.hxx>
 
 namespace mine
 {
@@ -32,7 +33,7 @@ namespace mine
   // bytes physically, all our logical coordinates (lines and columns) refer
   // to grapheme indices.
   //
-  class text_buffer
+  class content
   {
   public:
     // A single line of text.
@@ -87,13 +88,13 @@ namespace mine
     // We must ensure the buffer is never in an invalid state. An "empty" file
     // technically contains one line with zero characters.
     //
-    text_buffer ()
+    content ()
       : lines_ ({line {}})
     {
     }
 
     explicit
-    text_buffer (lines_type ls)
+    content (lines_type ls)
         : lines_ (std::move (ls))
     {
       MINE_INVARIANT (!lines_.empty ());
@@ -134,22 +135,22 @@ namespace mine
     // Mutations (Pure)
     //
 
-    text_buffer
+    [[nodiscard]] content
     insert_graphemes (cursor_position p, std::string_view s) const;
 
-    text_buffer
+    [[nodiscard]] content
     delete_previous_grapheme (cursor_position p) const;
 
-    text_buffer
+    [[nodiscard]] content
     delete_next_grapheme (cursor_position p) const;
 
-    text_buffer
+    [[nodiscard]] content
     insert_newline (cursor_position p) const;
 
-    text_buffer
+    [[nodiscard]] content
     delete_range (cursor_position b, cursor_position e) const;
 
-    std::string
+    [[nodiscard]] std::string
     get_range (cursor_position b, cursor_position e) const;
 
     const lines_type&
@@ -159,7 +160,7 @@ namespace mine
     }
 
     bool
-    operator== (const text_buffer& x) const noexcept
+    operator== (const content& x) const noexcept
     {
       return lines_ == x.lines_;
     }
@@ -167,19 +168,19 @@ namespace mine
   private:
     lines_type lines_;
 
-    text_buffer
+    [[nodiscard]] content
     merge_lines (line_number f, line_number s) const;
   };
 
   // Factories
   //
 
-  text_buffer
-  make_empty_buffer ();
+  [[nodiscard]] content
+  make_empty_content ();
 
-  text_buffer
-  make_buffer_from_string (std::string_view s);
+  [[nodiscard]] content
+  make_content_from_string (std::string_view s);
 
-  std::string
-  buffer_to_string (const text_buffer& b);
+  [[nodiscard]] std::string
+  content_to_string (const content& b);
 }

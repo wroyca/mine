@@ -1,5 +1,7 @@
 #include <mine/mine-async-input.hxx>
 
+#include <mine/mine-contract.hxx>
+
 using namespace std;
 
 namespace mine
