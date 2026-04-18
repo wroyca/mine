@@ -21,7 +21,9 @@ namespace mine
     // Bootstrap the initial state with a single empty buffer and a default
     // window layout.
     //
-    buffers_ = buffers_.set (document_id {1}, document {make_empty_content (), false, ""});
+    buffers_ = buffers_.set (
+      document_id {1},
+      document {make_empty_content (), false, "", language::unknown ()});
     windows_ = windows_.set (
       window_id {1},
       editor_window {document_id {1},
@@ -293,12 +295,22 @@ namespace mine
   }
 
   workspace workspace::
-  with_new_document (content b, string n) const
+  with_new_document (content b, string n, language lang) const
   {
     auto ns (*this);
-    document bs {move (b), false, move (n)};
+    document bs {move (b), false, move (n), move (lang)};
     ns.buffers_ = ns.buffers_.set (ns.next_document_id_, move (bs));
     ns.next_document_id_++;
+    return ns;
+  }
+
+  workspace workspace::
+  with_document_language (document_id id, language lang) const
+  {
+    auto ns (*this);
+    document d (ns.buffers_.at (id));
+    d.lang = move (lang);
+    ns.buffers_ = ns.buffers_.set (id, move (d));
     return ns;
   }
 

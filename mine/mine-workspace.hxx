@@ -11,6 +11,7 @@
 #include <mine/mine-viewport.hxx>
 #include <mine/mine-cursor.hxx>
 #include <mine/mine-content.hxx>
+#include <mine/mine-language.hxx>
 
 namespace mine
 {
@@ -46,9 +47,10 @@ namespace mine
   //
   struct document
   {
-    mine::content text;
-    bool          modified {false};
-    std::string   name;
+    mine::content  text;
+    bool           modified {false};
+    std::string    name;
+    mine::language lang;
 
     bool
     operator== (const document&) const = default;
@@ -308,7 +310,12 @@ namespace mine
     //
 
     [[nodiscard]] workspace
-    with_new_document (content b, std::string name) const;
+    with_new_document (content b,
+                       std::string name,
+                       language lang = language::unknown ()) const;
+
+    [[nodiscard]] workspace
+    with_document_language (document_id id, language lang) const;
 
     [[nodiscard]] workspace
     update_document (document_id id, content b) const;
@@ -458,6 +465,4 @@ namespace mine
     container_type s_;
     std::size_t i_;
   };
-
-
 }

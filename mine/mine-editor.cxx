@@ -4,6 +4,8 @@
 #include <sstream>
 #include <filesystem>
 
+#include <mine/mine-language.hxx>
+
 using namespace std;
 
 namespace mine
@@ -222,7 +224,9 @@ namespace mine
       return;
 
     document_id new_id (h_.current ().next_document_id ());
-    auto s (h_.current ().with_new_document (make_empty_content (), path));
+    auto s (h_.current ().with_new_document (make_empty_content (),
+                                             path,
+                                             detect_language (path)));
 
     s = s.switch_document (new_id);
 
