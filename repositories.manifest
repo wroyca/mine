@@ -13,4 +13,8 @@ trust: EC:50:13:E2:3D:F7:92:B4:50:0B:BF:2A:1F:7D:31:04:C6:57:6F:BC:BE:04:2E:E0:5
 
 :
 role: prerequisite
+location: https://github.com/build2-packaging/icu.git#master
+
+:
+role: prerequisite
 location: https://github.com/wroyca/tree-sitter.git#main
